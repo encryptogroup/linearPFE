@@ -50,7 +50,7 @@ typedef struct {
 #define KM11_CRYPTOSYSTEM_DJN 1
 #define KM11_CRYPTOSYSTEM_BFV 2
 #define KM11_CRYPTOSYSTEM_ECC 3
-#define KM11_CRYPTOSYSTEM KM11_CRYPTOSYSTEM_DJN
+#define KM11_CRYPTOSYSTEM KM11_CRYPTOSYSTEM_ECC
 
 // enable improved variant of KM11
 // (see section 3.2 "A More Efficient Variant" in KM11 paper)
@@ -202,7 +202,7 @@ protected:
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN || KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
 	const int m_nSymEncPaddingBytes = 16;
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
-	const int m_nSymEncPaddingBytes = 11;
+	const int m_nSymEncPaddingBytes = 15; // ECC ciphertexts are 33 Byte, pad to next AES block
 #endif
 
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
@@ -264,7 +264,7 @@ protected:
 	}
 
 	void exportCiphertextToBuf(BYTE* buf, seal::Ciphertext* ciphertext) {
-		size_t ciphertextCount = ciphertext->uint64_count();
+		size_t ciphertextCount = ciphertext->size();
 		assert(m_nBFVciphertextBufLen == ciphertextCount * 2);
 
 		for (size_t i = 0; i < ciphertextCount; i++) {
@@ -274,9 +274,9 @@ protected:
 	}
 
 	void importCiphertextFromBuf(seal::Ciphertext* ciphertext, BYTE* buf) {
-		size_t ciphertextCount = ciphertext->uint64_count();
+		size_t ciphertextCount = ciphertext->size();
 		BYTE* ciphertextData = (BYTE*) ciphertext->data();
-		assert(ciphertext->uint64_count() != 0);
+		assert(ciphertext->size() != 0);
 		for (size_t i = 0; i < ciphertextCount; i++) {
 			memcpy(ciphertextData + i * 8, buf + i * 2, 2);
 		}

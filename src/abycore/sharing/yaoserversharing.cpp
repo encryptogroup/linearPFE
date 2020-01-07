@@ -110,7 +110,6 @@ void YaoServerSharing::PrepareSetupPhase(ABYSetup* setup) {
 #ifdef KM11_GARBLING
 	// KM11 uses 4 keys per garbled table
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
-	assert(symbits == 37 * 8);
 	gt_size = ((uint64_t) m_nANDGates + m_nXORGates) * KEYS_PER_GATE_IN_TABLE * (m_nCiphertextSize + m_nSymEncPaddingBytes);
 #else
 	assert(symbits == m_nWireKeyBytes * 8);
@@ -164,7 +163,7 @@ void YaoServerSharing::PrepareSetupPhase(ABYSetup* setup) {
 	// ECC ciphertexts consist of two ECC field elements (K, C) per wire key
 	m_bEncWireKeys = (BYTE*) malloc(m_nNumberOfKeypairs * 2 * m_nCiphertextSize);
 	m_bEncGG = (BYTE*) malloc((m_nXORGates + m_nANDGates) * 4 * m_nCiphertextSize);
-  m_bGTKeys = (BYTE*) malloc(m_nCiphertextSize * 8);
+	m_bGTKeys = (BYTE*) malloc(m_nCiphertextSize * 8);
 	m_bTmpGTEntry = (BYTE*) malloc(sizeof(BYTE) * (m_nCiphertextSize + m_nSymEncPaddingBytes));
 	m_bTmpWirekeys = (BYTE*) malloc(m_nCiphertextSize * 2);
 #endif // KM11_CRYPTOSYSTEM
@@ -1816,7 +1815,8 @@ void YaoServerSharing::FinishCircuitLayer() {
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
 					m_vWireKeys[gateid]->export_to_bytes(m_bTmpWirekeys);
 
-					m_pKeyOps->XOR37(m_vClientKeySndBuf[clientROTbit].GetArr() + linbitctr * m_nCiphertextSize,
+					assert(m_nCiphertextSize == 33);
+					m_pKeyOps->XOR33(m_vClientKeySndBuf[clientROTbit].GetArr() + linbitctr * m_nCiphertextSize,
 													 m_vROTMasks[clientROTbit].GetArr() + m_nClientInputKexIdx * m_nCiphertextSize, // mask resulting from OT
 													 m_bTmpWirekeys); // client input key representing "0"
 
@@ -1824,7 +1824,7 @@ void YaoServerSharing::FinishCircuitLayer() {
 					s1->set_mul(m_vWireKeys[gateid], m_zR);
 					s1->export_to_bytes(m_bTmpWirekeys);
 
-					m_pKeyOps->XOR37(m_vClientKeySndBuf[1-clientROTbit].GetArr() + linbitctr * m_nCiphertextSize,
+					m_pKeyOps->XOR33(m_vClientKeySndBuf[1-clientROTbit].GetArr() + linbitctr * m_nCiphertextSize,
 													 m_vROTMasks[1-clientROTbit].GetArr() + m_nClientInputKexIdx * m_nCiphertextSize, // mask resulting from OT
 													 m_bTmpWirekeys); // client input key representing "1"
 #endif

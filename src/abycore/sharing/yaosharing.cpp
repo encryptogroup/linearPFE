@@ -80,11 +80,15 @@ void YaoSharing::sEnc(BYTE* c, BYTE* p, uint32_t p_len, BYTE* key, uint32_t key_
 	EVP_CIPHER_CTX_init(enc_ctx);
 	EVP_EncryptInit_ex(enc_ctx, EVP_aes_128_cbc(), NULL, evp_key, evp_iv);
 
+	//std::cout << "p_len: " << p_len << ", m_nSymEncPad: " << m_nSymEncPaddingBytes << std::endl;
+	assert((p_len + m_nSymEncPaddingBytes) % 16 == 0); // EVP_EncryptUpdate only encrypts blocks of 16 Byte
 	BYTE* tmpSymEncBuf = (BYTE*) malloc(p_len + m_nSymEncPaddingBytes);
 	memcpy(tmpSymEncBuf, p, p_len);
 	memset(tmpSymEncBuf + p_len, 0, m_nSymEncPaddingBytes);
 	int c_len;
 	EVP_EncryptUpdate(enc_ctx, c, &c_len, tmpSymEncBuf, p_len + m_nSymEncPaddingBytes);
+
+	//std::cout << "p_len: " << p_len << ", c_len: " << c_len << ", m_nSymEncPad" << m_nSymEncPaddingBytes << std::endl;
 	assert(c_len == p_len + m_nSymEncPaddingBytes);
 	EVP_CIPHER_CTX_free(enc_ctx);
 	free(tmpSymEncBuf);

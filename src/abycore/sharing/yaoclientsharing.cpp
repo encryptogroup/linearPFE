@@ -1488,7 +1488,8 @@ void YaoClientSharing::AssignClientInputKeys() {
 		//Assign the keys to the gate, TODO XOR with R-OT masks
 		for (uint32_t j = 0; j < gate->nvals; j++, m_nKeyInputRcvIdx++, offset++) {
 #if defined(KM11_GARBLING) && KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
-			m_pKeyOps->XOR37(gate->gs.yval + j * m_nCiphertextSize,
+			assert(m_nCiphertextSize == 33);
+			m_pKeyOps->XOR33(gate->gs.yval + j * m_nCiphertextSize,
 					m_vClientKeyRcvBuf[m_vChoiceBits.GetBitNoMask(m_nKeyInputRcvIdx)].GetArr() + offset * m_nCiphertextSize,
 					m_vROTMasks.GetArr() + m_nKeyInputRcvIdx * m_nCiphertextSize);
 #else
