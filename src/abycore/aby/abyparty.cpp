@@ -2,17 +2,17 @@
  \file 		abyparty.cpp
  \author	michael.zohner@ec-spride.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
-			Copyright (C) 2015 Engineering Cryptographic Protocols Group, TU Darmstadt
+			Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
 			This program is free software: you can redistribute it and/or modify
-			it under the terms of the GNU Affero General Public License as published
-			by the Free Software Foundation, either version 3 of the License, or
-			(at your option) any later version.
-			This program is distributed in the hope that it will be useful,
-			but WITHOUT ANY WARRANTY; without even the implied warranty of
-			MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-			GNU Affero General Public License for more details.
-			You should have received a copy of the GNU Affero General Public License
-			along with this program. If not, see <http://www.gnu.org/licenses/>.
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
 
  \brief		ABYParty class implementation.
  */
@@ -51,6 +51,9 @@ public:
 		m_evt.Set();
 	}
 
+	CEvent* GetEvent() {
+		return &m_evt;
+	}
 private:
 	void ThreadMain();
 	uint32_t threadid;
@@ -62,7 +65,7 @@ private:
 
 ABYParty::ABYParty(e_role pid, const std::string& addr, uint16_t port, seclvl seclvl,
 	uint32_t bitlen, uint32_t nthreads, e_mt_gen_alg mg_algo,
-	uint32_t reservegates)
+	uint32_t reservegates, const std::string& abycircdir)
 	: m_cCrypt(std::make_unique<crypto>(seclvl.symbits)), glock(std::make_unique<CLock>()),
 	m_eMTGenAlg(mg_algo), m_eRole(pid), m_nNumOTThreads(nthreads),
 	m_tComm(std::make_unique<comm_ctx>()),
@@ -94,35 +97,36 @@ ABYParty::ABYParty(e_role pid, const std::string& addr, uint16_t port, seclvl se
 	std::cout << "Generating circuit" << std::endl;
 #endif
 	StartWatch("Generating circuit", P_CIRCUIT);
-	if (!InitCircuit(bitlen, reservegates)) {
+	if (!InitCircuit(bitlen, reservegates, abycircdir)) {
 		std::cout << "There was an while initializing the circuit, ending! " << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
 	StopWatch("Time for circuit generation: ", P_CIRCUIT);
 }
 
-
 void ABYParty::ConnectAndBaseOTs() {
+	if (!is_online) {
 #ifndef BATCH
-	std::cout << "Establishing network connection" << std::endl;
+		std::cout << "Establishing network connection" << std::endl;
 #endif
-	//Establish network connection
-	StartWatch("Establishing network connection: ", P_NETWORK);
-	if (!EstablishConnection()) {
-		std::cout << "There was an error during establish connection, ending! " << std::endl;
-		std::exit(EXIT_FAILURE);
+		//Establish network connection
+		StartWatch("Establishing network connection: ", P_NETWORK);
+		if (!EstablishConnection()) {
+			std::cout << "There was an error during establish connection, ending! " << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+		StopWatch("Time for network connect: ", P_NETWORK);
+
+#ifndef BATCH
+		std::cout << "Performing base OTs" << std::endl;
+#endif
+		/* Pre-Compute Naor-Pinkas base OTs by starting two threads */
+		StartRecording("Starting NP OT", P_BASE_OT, m_vSockets);
+		m_pSetup->PrepareSetupPhase(m_tComm.get());
+		StopRecording("Time for NP OT: ", P_BASE_OT, m_vSockets);
+
+		is_online = true;
 	}
-	StopWatch("Time for network connect: ", P_NETWORK);
-
-#ifndef BATCH
-	std::cout << "Performing base OTs" << std::endl;
-#endif
-	/* Pre-Compute Naor-Pinkas base OTs by starting two threads */
-	StartRecording("Starting NP OT", P_BASE_OT, m_vSockets);
-	m_pSetup->PrepareSetupPhase(m_tComm.get());
-	StopRecording("Time for NP OT: ", P_BASE_OT, m_vSockets);
-
-	is_online = true;
 }
 
 ABYParty::~ABYParty() {
@@ -184,9 +188,7 @@ void ABYParty::ExecCircuit() {
 	std::cout << "Finishing circuit generation" << std::endl;
 #endif
 
-	if (!is_online) {
-		ConnectAndBaseOTs();
-	}
+	ConnectAndBaseOTs();
 
 	StartRecording("Starting execution", P_TOTAL, m_vSockets);
 
@@ -211,7 +213,7 @@ void ABYParty::ExecCircuit() {
 		std::cout << "Performing setup phase for " << m_vSharings[i]->sharing_type() << " sharing" << std::endl;
 #endif
 		if(i == S_YAO) {
-			StartWatch("Starting Circuit Garbling", P_GARBLE);
+			StartRecording("Starting Circuit Garbling", P_GARBLE, m_vSockets);
 			if(m_eRole == SERVER) {
 				m_vSharings[S_YAO]->PerformSetupPhase(m_pSetup.get());
 				m_vSharings[S_YAO_REV]->PerformSetupPhase(m_pSetup.get());
@@ -223,7 +225,7 @@ void ABYParty::ExecCircuit() {
 			m_vSharings[S_YAO_REV]->PerformSetupPhase(m_pSetup.get());*/
 			m_vSharings[S_YAO]->FinishSetupPhase(m_pSetup.get());
 			m_vSharings[S_YAO_REV]->FinishSetupPhase(m_pSetup.get());
-			StopWatch("Time for Circuit garbling: ", P_GARBLE);
+			StopRecording("Time for Circuit garbling: ", P_GARBLE, m_vSockets);
 		} else if (i == S_YAO_REV) {
 			//Do nothing, was done in parallel to Yao
 		} else {
@@ -258,19 +260,19 @@ void ABYParty::ExecCircuit() {
 }
 
 
-BOOL ABYParty::InitCircuit(uint32_t bitlen, uint32_t reservegates) {
+BOOL ABYParty::InitCircuit(uint32_t bitlen, uint32_t reservegates, const std::string& abycircdir) {
 	// Default reserved gates in abyparty.h constructur
 	m_pCircuit = new ABYCircuit(reservegates);
 
 	m_vSharings.resize(S_LAST);
-	m_vSharings[S_BOOL] = new BoolSharing(S_BOOL, m_eRole, 1, m_pCircuit, m_cCrypt.get());
+	m_vSharings[S_BOOL] = new BoolSharing(S_BOOL, m_eRole, 1, m_pCircuit, m_cCrypt.get(), abycircdir);
 	if (m_eRole == SERVER) {
-		m_vSharings[S_YAO] = new YaoServerSharing(S_YAO, SERVER, m_sSecLvl.symbits, m_pCircuit, m_cCrypt.get());
-		m_vSharings[S_YAO_REV] = new YaoClientSharing(S_YAO_REV, CLIENT, m_sSecLvl.symbits, m_pCircuit, m_cCrypt.get());
+		m_vSharings[S_YAO] = new YaoServerSharing(S_YAO, SERVER, m_sSecLvl.symbits, m_pCircuit, m_cCrypt.get(), abycircdir);
+		m_vSharings[S_YAO_REV] = new YaoClientSharing(S_YAO_REV, CLIENT, m_sSecLvl.symbits, m_pCircuit, m_cCrypt.get(), abycircdir);
 	}
 	else {
-		m_vSharings[S_YAO] = new YaoClientSharing(S_YAO, CLIENT, m_sSecLvl.symbits, m_pCircuit, m_cCrypt.get());
-		m_vSharings[S_YAO_REV] = new YaoServerSharing(S_YAO_REV, SERVER, m_sSecLvl.symbits, m_pCircuit, m_cCrypt.get());
+		m_vSharings[S_YAO] = new YaoClientSharing(S_YAO, CLIENT, m_sSecLvl.symbits, m_pCircuit, m_cCrypt.get(), abycircdir);
+		m_vSharings[S_YAO_REV] = new YaoServerSharing(S_YAO_REV, SERVER, m_sSecLvl.symbits, m_pCircuit, m_cCrypt.get(), abycircdir);
 	}
 	switch (bitlen) {
 	case 8:
@@ -289,7 +291,7 @@ BOOL ABYParty::InitCircuit(uint32_t bitlen, uint32_t reservegates) {
 		m_vSharings[S_ARITH] = new ArithSharing<uint32_t>(S_ARITH, m_eRole, 1, m_pCircuit, m_cCrypt.get(), m_eMTGenAlg);
 		break;
 	}
-	m_vSharings[S_SPLUT] = new SetupLUT(S_SPLUT, m_eRole, 1, m_pCircuit, m_cCrypt.get());
+	m_vSharings[S_SPLUT] = new SetupLUT(S_SPLUT, m_eRole, 1, m_pCircuit, m_cCrypt.get(), abycircdir);
 
 	m_vGates = &(m_pCircuit->GatesVec());
 
@@ -402,7 +404,7 @@ BOOL ABYParty::PerformInteraction() {
 	return success;
 }
 
-BOOL ABYParty::ThreadSendValues() {
+BOOL ABYParty::ThreadSendValues(uint32_t id) {
 	std::vector<std::vector<BYTE*> >sendbuf(m_vSharings.size());
 	std::vector<std::vector<uint64_t> >sndbytes(m_vSharings.size());
 
@@ -433,7 +435,7 @@ BOOL ABYParty::ThreadSendValues() {
 	//gettimeofday(&tstart, NULL);
 	if(snd_buf_size_total > 0) {
 		//m_vSockets[2]->Send(snd_buf_total, snd_buf_size_total);
-		m_tPartyChan->send(snd_buf_total, snd_buf_size_total);
+		m_tPartyChan->blocking_send(m_vThreads[id]->GetEvent(), snd_buf_total, snd_buf_size_total);
 	}
 	free(snd_buf_total);
 
@@ -690,7 +692,7 @@ void ABYParty::CPartyWorkerThread::ThreadMain() {
 			return;
 		case e_Party_Comm:
 			if (threadid == 0){
-				bSuccess = m_pCallback->ThreadSendValues();
+				bSuccess = m_pCallback->ThreadSendValues(threadid);
 			}
 			else{
 				bSuccess = m_pCallback->ThreadReceiveValues();

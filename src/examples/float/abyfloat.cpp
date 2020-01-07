@@ -2,17 +2,17 @@
  \file 		abyfloat.cpp
  \author	daniel.demmler@ec-spride.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
- Copyright (C) 2017 Engineering Cryptographic Protocols Group, TU Darmstadt
- This program is free software: you can redistribute it and/or modify
- it under the terms of the GNU Affero General Public License as published
- by the Free Software Foundation, either version 3 of the License, or
- (at your option) any later version.
- This program is distributed in the hope that it will be useful,
- but WITHOUT ANY WARRANTY; without even the implied warranty of
- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- GNU Affero General Public License for more details.
- You should have received a copy of the GNU Affero General Public License
- along with this program. If not, see <http://www.gnu.org/licenses/>.
+ Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
+			This program is free software: you can redistribute it and/or modify
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <ENCRYPTO_utils/crypto/crypto.h>
@@ -28,7 +28,7 @@
 
 void read_test_options(int32_t* argcp, char*** argvp, e_role* role,
 	uint32_t* bitlen, uint32_t* nvals, uint32_t* secparam, std::string* address,
-	uint16_t* port, int32_t* test_op, uint32_t* test_bit, std::string* circuit, double* fpa, double* fpb) {
+	uint16_t* port, int32_t* test_op, uint32_t* test_bit, double* fpa, double* fpb) {
 
 	uint32_t int_role = 0, int_port = 0, int_testbit = 0;
 
@@ -39,7 +39,6 @@ void read_test_options(int32_t* argcp, char*** argvp, e_role* role,
 	{(void*) bitlen, T_NUM, "b", "Bit-length, default 32", false,false },
 	{(void*) secparam, T_NUM, "s", "Symmetric Security Bits, default: 128", false, false },
 	{(void*) address, T_STR, "a", "IP-address, default: localhost", false, false },
-	{(void*) circuit, T_STR, "c", "circuit file name", false, false },
 	{(void*) &int_port, T_NUM, "p", "Port, default: 7766", false, false },
 	{(void*) test_op, T_NUM, "t", "Single test (leave out for all operations), default: off", false, false },
 	{(void*) fpa, T_DOUBLE, "x", "FP a", false, false },
@@ -71,7 +70,9 @@ void test_verilog_add64_SIMD(e_role role, const std::string& address, uint16_t p
 	// for addition we operate on doubles, so set bitlen to 64 bits
 	uint32_t bitlen = 64;
 
-	ABYParty* party = new ABYParty(role, address, port, seclvl, bitlen, nthreads, mt_alg);
+	std::string circuit_dir = "../../bin/circ/";
+
+	ABYParty* party = new ABYParty(role, address, port, seclvl, bitlen, nthreads, mt_alg, 100000, circuit_dir);
 
 	std::vector<Sharing*>& sharings = party->GetSharings();
 
@@ -110,31 +111,38 @@ void test_verilog_add64_SIMD(e_role role, const std::string& address, uint16_t p
 
 	// FP addition gate
 	share* sum = circ->PutFPGate(ain, bin, ADD, bitlen, nvals, no_status);
-	
+
 	// 32-bit FP addition gate (bitlen, nvals, no_status are omitted)
 	share* sqrt_share = circ->PutFPGate(asqrtin, SQRT);
+
+	share* cmp = circ->PutFPGate(ain, bin, CMP, bitlen, nvals);
 
 	// output gate
 	share* add_out = circ->PutOUTGate(sum, ALL);
 	share* sqrt_out = circ->PutOUTGate(sqrt_share, ALL);
+	share* cmp_out = circ->PutOUTGate(cmp, ALL);
 
 	// run SMPC
 	party->ExecCircuit();
 
 	// retrieve plain text output
-	uint32_t out_bitlen, out_nvals;
-	uint64_t *out_vals;
+	uint32_t out_bitlen_add, out_bitlen_cmp, out_nvals;
+	uint64_t *out_vals_add, *out_vals_cmp;
 
-	add_out->get_clear_value_vec(&out_vals, &out_bitlen, &out_nvals);
+	add_out->get_clear_value_vec(&out_vals_add, &out_bitlen_add, &out_nvals);
+	cmp_out->get_clear_value_vec(&out_vals_cmp, &out_bitlen_cmp, &out_nvals);
 
 	// print every output
 	for (uint32_t i = 0; i < nvals; i++) {
 
 		// dereference output value as double without casting the content
-		double val = *((double*) &out_vals[i]);
+		double val = *((double*) &out_vals_add[i]);
 
 		std::cout << "ADD RES: " << val << " = " << *(double*) &avals[i] << " + " << *(double*) &bvals[i] << " | nv: " << out_nvals
-		<< " bitlen: " << out_bitlen << std::endl;
+		<< " bitlen: " << out_bitlen_add << std::endl;
+
+		std::cout << "CMP RES: " << out_vals_cmp[i] << " = " << *(double*) &avals[i] << " > " << *(double*) &bvals[i] << " | nv: " << out_nvals
+		<< " bitlen: " << out_bitlen_cmp << std::endl;
 	}
 
 	uint32_t *sqrt_out_vals = (uint32_t*) sqrt_out->get_clear_value_ptr();
@@ -152,14 +160,13 @@ int main(int argc, char** argv) {
 
 	uint16_t port = 7766;
 	std::string address = "127.0.0.1";
-	std::string circuit = "none.aby";
 	int32_t test_op = -1;
 	e_mt_gen_alg mt_alg = MT_OT;
 	uint32_t test_bit = 0;
 	double fpa = 0, fpb = 0;
 
 	read_test_options(&argc, &argv, &role, &bitlen, &nvals, &secparam, &address,
-		&port, &test_op, &test_bit, &circuit, &fpa, &fpb);
+		&port, &test_op, &test_bit, &fpa, &fpb);
 
 	std::cout << std::fixed << std::setprecision(3);
 	std::cout << "double input values: " << fpa << " ; " << fpb << std::endl;

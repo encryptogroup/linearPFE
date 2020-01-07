@@ -2,17 +2,17 @@
  \file 		splut.cpp
  \author	michael.zohner@ec-spride.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
-			Copyright (C) 2015 Engineering Cryptographic Protocols Group, TU Darmstadt
+			Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
 			This program is free software: you can redistribute it and/or modify
-			it under the terms of the GNU Affero General Public License as published
-			by the Free Software Foundation, either version 3 of the License, or
-			(at your option) any later version.
-			This program is distributed in the hope that it will be useful,
-			but WITHOUT ANY WARRANTY; without even the implied warranty of
-			MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-			GNU Affero General Public License for more details.
-			You should have received a copy of the GNU Affero General Public License
-			along with this program. If not, see <http://www.gnu.org/licenses/>.
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
  \brief		Implementation of the SP-LUT protocol
  */
 #include "splut.h"
@@ -26,8 +26,8 @@
 #include "../circuit/booleancircuits.h"
 
 
-SetupLUT::SetupLUT(e_sharing context, e_role role, uint32_t sharebitlen, ABYCircuit* circuit, crypto* crypt)
-	: Sharing(context, role, sharebitlen, circuit, crypt) {
+SetupLUT::SetupLUT(e_sharing context, e_role role, uint32_t sharebitlen, ABYCircuit* circuit, crypto* crypt, const std::string& circdir)
+	: Sharing(context, role, sharebitlen, circuit, crypt, circdir) {
 	Init();
 }
 
@@ -90,7 +90,7 @@ void SetupLUT::Init() {
 	m_nInputShareRcvSize = 0;
 	m_nOutputShareRcvSize = 0;
 
-	m_cBoolCircuit = new BooleanCircuit(m_pCircuit, m_eRole, m_eContext);
+	m_cBoolCircuit = new BooleanCircuit(m_pCircuit, m_eRole, m_eContext, m_cCircuitFileDir);
 
 	//first round: the server is the active part and skips the first send iteration while the client waits until the server is done with depth 1
 	m_bPlaySender = !((bool) m_eRole);
@@ -205,7 +205,7 @@ void SetupLUT::PrepareSetupPhase(ABYSetup* setup) {
 			}
 		}
 		//create the outbit mapping
-		assert(max_out_bits < (1<<31));//some maximal bitlen
+		assert(max_out_bits < (uint32_t) (1<<31));//some maximal bitlen
 		m_vOutBitMapping[i].resize(max_out_bits+1, 0);
 
 		for(uint32_t j = 0; j < ingatelens[i]; j++) {
@@ -342,10 +342,10 @@ void SetupLUT::PrepareSetupPhase(ABYSetup* setup) {
 
 }
 
-void SetupLUT::PerformSetupPhase(ABYSetup* setup) {
+void SetupLUT::PerformSetupPhase([[maybe_unused]] ABYSetup* setup) {
 	//Do nothing
 }
-void SetupLUT::FinishSetupPhase(ABYSetup* setup) {
+void SetupLUT::FinishSetupPhase([[maybe_unused]] ABYSetup* setup) {
 	if (m_nTotalTTs == 0)
 		return;
 
@@ -625,8 +625,19 @@ inline void SetupLUT::EvaluateConstantGate(uint32_t gateid) {
 	InstantiateGate(gate);
 	value = value * (m_eRole != CLIENT);
 
-	for (uint32_t i = 0; i < ceil_divide(gate->nvals, GATE_T_BITS); i++) {
-		gate->gs.val[i] = value;
+	uint32_t valsize = ceil_divide(gate->nvals, GATE_T_BITS);
+	UGATE_T setval;
+	if(value == 1L) {
+		setval = ~(0L);
+	} else {
+		setval = 0L;
+	}
+	for (uint32_t i = 0; i < valsize; ++i) {
+		gate->gs.val[i] = setval;
+	}
+	uint32_t valmod = gate->nvals % GATE_T_BITS;
+	if(valmod != 0) {
+		gate->gs.val[valsize - 1] &= (1L << valmod) - 1L;
 	}
 #ifdef DEBUG_SPLUT
 		std::cout << "Constant gate value: "<< value << std::endl;

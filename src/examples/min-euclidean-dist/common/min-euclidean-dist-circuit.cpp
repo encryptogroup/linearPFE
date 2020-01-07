@@ -2,17 +2,17 @@
  \file 		min-euclidean-dist-circuit.cpp
  \author 	michael.zohner@ec-spride.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
-			Copyright (C) 2015 Engineering Cryptographic Protocols Group, TU Darmstadt
+			Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
 			This program is free software: you can redistribute it and/or modify
-			it under the terms of the GNU Affero General Public License as published
-			by the Free Software Foundation, either version 3 of the License, or
-			(at your option) any later version.
-			This program is distributed in the hope that it will be useful,
-			but WITHOUT ANY WARRANTY; without even the implied warranty of
-			MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-			GNU Affero General Public License for more details.
-			You should have received a copy of the GNU Affero General Public License
-			along with this program. If not, see <http://www.gnu.org/licenses/>.
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
  \brief		Implementation of Minimum Euclidean Distance Circuit
  */
 #include "min-euclidean-dist-circuit.h"
@@ -41,9 +41,9 @@ int32_t test_min_eucliden_dist_circuit(e_role role, const std::string& address, 
 	uint64_t verify;
 
 	Circuit *distcirc, *mincirc;
-	
+
 	share ***Sshr, **Cshr, **Ssqr, *Csqr, *mindst;
-	
+
 	srand(time(NULL));
 
 	//generate dbsize * dim * bitlen random bits as server db
@@ -74,7 +74,7 @@ int32_t test_min_eucliden_dist_circuit(e_role role, const std::string& address, 
 
 	Ssqr = (share**) malloc(sizeof(share*) * dbsize);
 	for (i = 0; i < dbsize; i++) {
-		tempsum = 0; 
+		tempsum = 0;
 		for (j = 0; j < dim; j++) {
 			temp = serverdb[i][j];
 			tempsum += (temp * temp);
@@ -161,7 +161,7 @@ share* build_min_euclidean_dist_circuit(share*** S, share** C, uint32_t n, uint3
 			distance[i] = mincirc->PutA2YGate(distance[i]);
 		}
 	}
-  
+
 	mindist = mincirc->PutMinGate(distance, n);
 	free(distance);
 	return mindist;
@@ -171,7 +171,7 @@ uint64_t verify_min_euclidean_dist(uint32_t** serverdb, uint32_t* clientquery, u
 	uint32_t i, j;
 	uint64_t mindist, tmpdist;
 
-	mindist = MAX_UINT;
+	mindist = ULLONG_MAX;
 	for(i=0; i < dbsize; i++) {
 		tmpdist = 0;
 		for(j=0; j < dim; j++) {

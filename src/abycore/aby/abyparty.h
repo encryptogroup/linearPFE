@@ -2,17 +2,17 @@
  \file 		abyparty.h
  \author	michael.zohner@ec-spride.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
-			Copyright (C) 2015 Engineering Cryptographic Protocols Group, TU Darmstadt
+			Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
 			This program is free software: you can redistribute it and/or modify
-			it under the terms of the GNU Affero General Public License as published
-			by the Free Software Foundation, either version 3 of the License, or
-			(at your option) any later version.
-			This program is distributed in the hope that it will be useful,
-			but WITHOUT ANY WARRANTY; without even the implied warranty of
-			MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-			GNU Affero General Public License for more details.
-			You should have received a copy of the GNU Affero General Public License
-			along with this program. If not, see <http://www.gnu.org/licenses/>.
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
  \brief		ABYParty class.
  */
 
@@ -41,7 +41,7 @@ class CLock;
 class ABYParty {
 public:
 	ABYParty(e_role pid, const std::string& addr = "127.0.0.1", uint16_t port = 7766, seclvl seclvl = LT, uint32_t bitlen = 32,
-			uint32_t nthreads =	2, e_mt_gen_alg mg_algo = MT_OT, uint32_t reservegates = 65536);
+			uint32_t nthreads =	2, e_mt_gen_alg mg_algo = MT_OT, uint32_t reservegates = 65536, const std::string& abycircdir = ABY_CIRCUIT_DIR);
 	~ABYParty();
 
 	/**
@@ -66,7 +66,7 @@ private:
 	BOOL Init();
 	void Cleanup();
 
-	BOOL InitCircuit(uint32_t bitlen, uint32_t reservegates);
+	BOOL InitCircuit(uint32_t bitlen, uint32_t reservegates, const std::string& circdir = ABY_CIRCUIT_DIR);
 
 	BOOL EstablishConnection();
 
@@ -83,7 +83,7 @@ private:
 	void UsedGate(uint32_t gateid);
 
 	BOOL PerformInteraction();
-	BOOL ThreadSendValues();
+	BOOL ThreadSendValues(uint32_t id);
 	BOOL ThreadReceiveValues();
 
 	void PrintPerformanceStatistics();

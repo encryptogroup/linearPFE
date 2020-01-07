@@ -2,17 +2,17 @@
  \file 		arithmeticcircuits.cpp
  \author	michael.zohner@ec-spride.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
-			Copyright (C) 2015 Engineering Cryptographic Protocols Group, TU Darmstadt
+			Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
 			This program is free software: you can redistribute it and/or modify
-			it under the terms of the GNU Affero General Public License as published
-			by the Free Software Foundation, either version 3 of the License, or
-			(at your option) any later version.
-			This program is distributed in the hope that it will be useful,
-			but WITHOUT ANY WARRANTY; without even the implied warranty of
-			MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-			GNU Affero General Public License for more details.
-			You should have received a copy of the GNU Affero General Public License
-			along with this program. If not, see <http://www.gnu.org/licenses/>.
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
  \brief		Arithmetic Circuit class.
  */
 
@@ -179,12 +179,12 @@ uint32_t ArithmeticCircuit::PutSharedSIMDINGate(uint32_t ninvals) {
 }
 
 
-share* ArithmeticCircuit::PutDummyINGate(uint32_t bitlen) {
+share* ArithmeticCircuit::PutDummyINGate([[maybe_unused]] uint32_t bitlen) {
 	std::vector<uint32_t> wires(1);
 	wires[0] = PutINGate((e_role) !m_eMyRole);
 	return new arithshare(wires, this);
 }
-share* ArithmeticCircuit::PutDummySIMDINGate(uint32_t nvals, uint32_t bitlen) {
+share* ArithmeticCircuit::PutDummySIMDINGate(uint32_t nvals, [[maybe_unused]] uint32_t bitlen) {
 	std::vector<uint32_t> wires(1);
 	wires[0] = PutSIMDINGate(nvals, (e_role) !m_eMyRole);
 	return new arithshare(wires, this);
@@ -281,40 +281,79 @@ share* ArithmeticCircuit::PutCallbackGate(share* in, uint32_t rounds, void (*cal
 	return new arithshare(gateid, this);
 }
 
-share* ArithmeticCircuit::PutTruthTableGate(share* in, uint64_t* ttable) {
-	std::cerr << "PutTruthTableGate not implemented in ArithmeticCircuit!!" << std::endl;
-	return NULL;
-}
-
-share* ArithmeticCircuit::PutTruthTableMultiOutputGate(share* in, uint32_t out_bits, uint64_t* ttable) {
-	std::cerr << "PutTruthTableMultiOutputGate not implemented in ArithmeticCircuit!!" << std::endl;
-	return NULL;
-}
-
 
 share* ArithmeticCircuit::PutCONSGate(uint8_t* val, uint32_t bitlen) {
-	//TODO
-	std::cerr << "Not implemented yet!" << std::endl;
-	return NULL; //new arithshare(0, this);
+	return PutSIMDCONSGate(1, val, bitlen);
 }
 
+//TODO Test the gates properly
 share* ArithmeticCircuit::PutSIMDCONSGate(uint32_t nvals, uint8_t* val, uint32_t bitlen) {
-	//TODO
-	std::cerr << "Not implemented yet!" << std::endl;
-	return NULL; //new arithshare(0, this);
+	uint8_t sharebytes = m_nShareBitLen / 8;
+	uint32_t valamount = bitlen / m_nShareBitLen;
+	std::vector<uint32_t> gateids(valamount);
+	for(uint32_t i = 0; i < valamount; ++i) {
+		UGATE_T one_val = 0;
+		for(uint8_t j = 0; j < sharebytes; ++j) {
+			one_val |= val[i * sharebytes + j] << (j * 8);
+		}
+		gateids[i] = PutConstantGate(one_val, nvals);
+	}
+	return new arithshare(gateids, this);
 }
 
 
 share* ArithmeticCircuit::PutCONSGate(uint32_t* val, uint32_t bitlen) {
-	//TODO
-	std::cerr << "Not implemented yet!" << std::endl;
-	return NULL; //new arithshare(0, this);
+	return PutSIMDCONSGate(1, val, bitlen);
 }
 
+//TODO Test the gates properly
 share* ArithmeticCircuit::PutSIMDCONSGate(uint32_t nvals, uint32_t* val, uint32_t bitlen) {
-	//TODO
-	std::cerr << "Not implemented yet!" << std::endl;
-	return NULL; //new arithshare(0, this);
+	uint32_t valamount = bitlen / m_nShareBitLen;
+	std::vector<uint32_t> gateids(valamount);
+	if(m_nShareBitLen == 64) {
+		for(uint32_t i = 0; i < valamount; ++i) {
+			gateids[i] = PutConstantGate(((UGATE_T) val[i * 2]) + (((UGATE_T) val[i * 2 + 1]) << 32), nvals);
+		}
+	} else if(m_nShareBitLen == 32){
+		for(uint32_t i = 0; i < valamount; ++i) {
+			gateids[i] = PutConstantGate((UGATE_T) val[i], nvals);
+		}
+	} else if(m_nShareBitLen == 16) {
+		uint32_t loopamount = valamount / 2;
+		for(uint32_t i = 0; i < loopamount; ++i) {
+			gateids[i * 2] = PutConstantGate((UGATE_T) (val[i] & 0x0000FFFF), nvals);
+			gateids[i * 2 + 1] = PutConstantGate((UGATE_T) (val[i] & 0xFFFF0000) >> 16, nvals);
+		}
+		if(valamount % 2 == 1) {
+			uint32_t lastamount = valamount - 1;
+			gateids[lastamount] = PutConstantGate((UGATE_T) (val[loopamount] & 0x0000FFFF), nvals);
+		}
+	} else { //m_nShareBitLen == 8
+		uint32_t loopamount = valamount / 4;
+		for(uint32_t i = 0; i < loopamount; ++i) {
+			gateids[i * 4] = PutConstantGate((UGATE_T) (val[i] & 0x000000FF), nvals);
+			gateids[i * 4 + 1] = PutConstantGate((UGATE_T) (val[i] & 0x0000FF00) >> 8, nvals);
+			gateids[i * 4 + 2] = PutConstantGate((UGATE_T) (val[i] & 0x00FF0000) >> 16, nvals);
+			gateids[i * 4 + 3] = PutConstantGate((UGATE_T) (val[i] & 0xFF000000) >> 24, nvals);
+		}
+		if(valamount % 4 == 1) {
+			uint32_t lastamount = valamount - 1;
+			gateids[lastamount] = PutConstantGate((UGATE_T) (val[loopamount] & 0x000000FF), nvals);
+		} else if(valamount % 4 == 2) {
+			uint32_t lastamount = valamount - 1;
+			uint32_t secondlastamount = valamount - 2;
+			gateids[secondlastamount] = PutConstantGate((UGATE_T) (val[loopamount] & 0x000000FF), nvals);
+			gateids[lastamount] = PutConstantGate((UGATE_T) (val[loopamount] & 0x0000FF00) >> 8, nvals);
+		} else if(valamount % 4 == 3) {
+			uint32_t lastamount = valamount - 1;
+			uint32_t secondlastamount = valamount - 2;
+			uint32_t thirdlastamount = valamount - 3;
+			gateids[thirdlastamount] = PutConstantGate((UGATE_T) (val[loopamount] & 0x000000FF), nvals);
+			gateids[secondlastamount] = PutConstantGate((UGATE_T) (val[loopamount] & 0x0000FF00) >> 8, nvals);
+			gateids[lastamount] = PutConstantGate((UGATE_T) (val[loopamount] & 0x00FF0000) >> 16, nvals);
+		}
+	}
+	return new arithshare(gateids, this);
 }
 
 

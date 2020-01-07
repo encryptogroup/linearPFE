@@ -2,17 +2,17 @@
  \file 		lowmccircuit.cpp
  \author 	michael.zohner@ec-spride.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
-			Copyright (C) 2015 Engineering Cryptographic Protocols Group, TU Darmstadt
+			Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
 			This program is free software: you can redistribute it and/or modify
-			it under the terms of the GNU Affero General Public License as published
-			by the Free Software Foundation, either version 3 of the License, or
-			(at your option) any later version.
-			This program is distributed in the hope that it will be useful,
-			but WITHOUT ANY WARRANTY; without even the implied warranty of
-			MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-			GNU Affero General Public License for more details.
-			You should have received a copy of the GNU Affero General Public License
-			along with this program. If not, see <http://www.gnu.org/licenses/>.
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
  \brief		Prototypical benchmark implementation of LowMCCiruit. Attention: Does not yield correct result!
  */
 #include "lowmccircuit.h"
@@ -20,7 +20,8 @@
 #include <ENCRYPTO_utils/crypto/crypto.h>
 
 static uint32_t m_nRndCtr;
-static code* m_tGrayCode;
+static uint32_t* m_tGrayCode;
+static uint32_t* m_tGrayCodeIncrement;
 static uint32_t m_nZeroGate;
 
 //sboxes (m), key-length (k), statesize (n), data (d), rounds (r)
@@ -91,8 +92,8 @@ share* BuildLowMCCircuit(share* val, share* key, BooleanCircuit* circ, LowMCPara
 	m_nZeroGate = zerogate;
 
 	//Build the GrayCode for the optimal window-size
-	uint32_t wsize = floor_log2(statesize) - 2;
-	m_tGrayCode = build_code(wsize);
+	m_tGrayCode = BuildGrayCode(statesize);
+	m_tGrayCodeIncrement = BuildGrayCodeIncrement(statesize);
 
 	//copy the input to the current state
 	for (i = 0; i < statesize; i++)
@@ -117,7 +118,8 @@ share* BuildLowMCCircuit(share* val, share* key, BooleanCircuit* circ, LowMCPara
 
 	}
 
-	destroy_code(m_tGrayCode);
+	free(m_tGrayCode);
+	free(m_tGrayCodeIncrement);
 
 #if PRINT_PERFORMANCE_STATS
 	std::cout << "Total Number of Boolean Gates: " << circ->GetNumGates() << std::endl;
@@ -220,7 +222,7 @@ void FourRussiansMatrixMult(std::vector<uint32_t>& state, uint32_t lowmcstatesiz
 
 	for (i = 0, bitctr = 0; i < ceil_divide(lowmcstatesize, wsize); i++) { //for each column-window
 		for (j = 1; j < (1 << wsize); j++) {
-			lut[m_tGrayCode->ord[j]] = circ->PutXORGate(lut[m_tGrayCode->ord[j - 1]], state_pad[i * wsize + m_tGrayCode->inc[j - 1]]);
+			lut[m_tGrayCode[j]] = circ->PutXORGate(lut[m_tGrayCode[j - 1]], state_pad[i * wsize + m_tGrayCodeIncrement[j - 1]]);
 		}
 
 		for (j = 0; j < lowmcstatesize; j++, bitctr += wsize) {
@@ -273,3 +275,27 @@ void CallbackMultiplyAndDestroy4RMatrix(GATE* gate, void* matrix) {
 	//TODO
 }
 
+uint32_t* BuildGrayCode(uint32_t length) {
+	uint32_t* gray_code = (uint32_t*) malloc(sizeof(uint32_t) * length);
+	for(uint32_t i = 0; i < length; ++i) {
+		gray_code[i] = i ^ (i >> 1);
+	}
+	return gray_code;
+}
+
+uint32_t* BuildGrayCodeIncrement(uint32_t length) {
+	uint32_t* gray_code_increment = (uint32_t*) malloc(sizeof(uint32_t) * length);
+	for(uint32_t i = 0; i < length; ++i) {
+		gray_code_increment[i] = 0;
+	}
+	uint32_t length_inc = 2;
+	while(length_inc < length) {
+		uint32_t length_count = length_inc - 1;
+		while(length_count <= length) {
+			(gray_code_increment[length_count])++;
+			length_count += length_inc;
+		}
+		length_inc <<= 1; 
+	}
+	return gray_code_increment;
+}

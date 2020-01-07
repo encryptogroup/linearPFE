@@ -2,17 +2,17 @@
  \file		arithmeticcircuits.h
  \author	michael.zohner@ec-spride.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
-			Copyright (C) 2015 Engineering Cryptographic Protocols Group, TU Darmstadt
+			Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
 			This program is free software: you can redistribute it and/or modify
-			it under the terms of the GNU Affero General Public License as published
-			by the Free Software Foundation, either version 3 of the License, or
-			(at your option) any later version.
-			This program is distributed in the hope that it will be useful,
-			but WITHOUT ANY WARRANTY; without even the implied warranty of
-			MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-			GNU Affero General Public License for more details.
-			You should have received a copy of the GNU Affero General Public License
-			along with this program. If not, see <http://www.gnu.org/licenses/>.
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
 
  \brief		A collection of boolean circuits for boolean and yao sharing in the ABY framework
  */
@@ -221,8 +221,16 @@ public:
 
 
 	share* PutCallbackGate(share* in, uint32_t rounds, void (*callback)(GATE*, void*), void* infos, uint32_t nvals);
-	share* PutTruthTableGate(share* in, uint64_t* ttable);
-	share* PutTruthTableMultiOutputGate(share* in, uint32_t out_bits, uint64_t* ttable);
+
+	share* PutTruthTableGate(share*, uint64_t*) {
+		std::cerr << "PutTruthTableGate not implemented in ArithmeticCircuit!!" << std::endl;
+		return NULL;
+	}
+
+	share* PutTruthTableMultiOutputGate(share*, uint32_t, uint64_t*) {
+		std::cerr << "PutTruthTableMultiOutputGate not implemented in ArithmeticCircuit!!" << std::endl;
+		return NULL;
+	}
 
 
 
@@ -342,7 +350,7 @@ private:
 		return shr;
 	}
 
-	template<class T> share* InternalPutSharedINGate(uint32_t nvals, T val, uint32_t bitlen) {
+	template<class T> share* InternalPutSharedINGate(uint32_t nvals, T val, [[maybe_unused]] uint32_t bitlen) {
 		share* shr = new arithshare(this);
 		shr->set_wire_id(0, PutSharedSIMDINGate(nvals, val));
 		return shr;
@@ -370,7 +378,7 @@ private:
 		return shr;
 	}
 
-	template<class T> share* InternalPutINGate(uint32_t nvals, T val, uint32_t bitlen, e_role role) {
+	template<class T> share* InternalPutINGate(uint32_t nvals, T val, [[maybe_unused]] uint32_t bitlen, e_role role) {
 		share* shr = new arithshare(this);
 		shr->set_wire_id(0, PutSIMDINGate(nvals, val, role));
 		return shr;

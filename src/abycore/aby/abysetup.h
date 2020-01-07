@@ -2,17 +2,17 @@
  \file 		abysetup.h
  \author	michael.zohner@ec-spride.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
-			Copyright (C) 2015 Engineering Cryptographic Protocols Group, TU Darmstadt
+			Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
 			This program is free software: you can redistribute it and/or modify
-			it under the terms of the GNU Affero General Public License as published
-			by the Free Software Foundation, either version 3 of the License, or
-			(at your option) any later version.
-			This program is distributed in the hope that it will be useful,
-			but WITHOUT ANY WARRANTY; without even the implied warranty of
-			MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-			GNU Affero General Public License for more details.
-			You should have received a copy of the GNU Affero General Public License
-			along with this program. If not, see <http://www.gnu.org/licenses/>.
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
  \brief		Contains all methods that are processed during the setup phase of ABY
  */
 
@@ -152,19 +152,19 @@ private:
 	BOOL Init();
 	void Cleanup();
 
-	BOOL ThreadRunNPSnd(uint32_t exec);
-	BOOL ThreadRunNPRcv(uint32_t exec);
+	BOOL ThreadRunNPSnd();
+	BOOL ThreadRunNPRcv();
 
-	BOOL ThreadRunIKNPSnd(uint32_t exec);
-	BOOL ThreadRunIKNPRcv(uint32_t exec);
+	BOOL ThreadRunIKNPSnd(uint32_t threadid);
+	BOOL ThreadRunIKNPRcv(uint32_t threadid);
 
-	BOOL ThreadRunKKSnd(uint32_t exec);
-	BOOL ThreadRunKKRcv(uint32_t exec);
+	BOOL ThreadRunKKSnd(uint32_t threadid);
+	BOOL ThreadRunKKRcv(uint32_t threadid);
 
-	BOOL ThreadSendData();
+	BOOL ThreadSendData(uint32_t threadid);
 	BOOL ThreadReceiveData();
 
-	BOOL ThreadRunPaillierMTGen(uint32_t exec);
+	BOOL ThreadRunPaillierMTGen(uint32_t threadid);
 	BOOL ThreadRunDGKMTGen(uint32_t threadid);
 
 	// IKNP OTTask values
@@ -219,6 +219,9 @@ private:
 			std::lock_guard<std::mutex> lock(m_eJob_mutex_);
 			m_eJob = e;
 			m_evt.Set();
+		}
+		CEvent* GetEvent() {
+			return &m_evt;
 		}
 	private:
 		void ThreadMain();

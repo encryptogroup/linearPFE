@@ -2,17 +2,17 @@
  \file 		millionaire_prob_test.cpp
  \author	sreeram.sadasivam@cased.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
-			Copyright (C) 2015 Engineering Cryptographic Protocols Group, TU Darmstadt
+			Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
 			This program is free software: you can redistribute it and/or modify
-			it under the terms of the GNU Affero General Public License as published
-			by the Free Software Foundation, either version 3 of the License, or
-			(at your option) any later version.
-			This program is distributed in the hope that it will be useful,
-			but WITHOUT ANY WARRANTY; without even the implied warranty of
-			MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-			GNU Affero General Public License for more details.
-			You should have received a copy of the GNU Affero General Public License
-			along with this program. If not, see <http://www.gnu.org/licenses/>.
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
  \brief		Millionaire problem Test class implementation.
  */
 
@@ -29,7 +29,6 @@ int32_t read_test_options(int32_t* argcp, char*** argvp, e_role* role,
 		uint16_t* port, int32_t* test_op) {
 
 	uint32_t int_role = 0, int_port = 0;
-	bool useffc = false;
 
 	parsing_ctx options[] =
 			{ { (void*) &int_role, T_NUM, "r", "Role: 0/1", true, false }, {
@@ -80,10 +79,10 @@ int main(int argc, char** argv) {
 	seclvl seclvl = get_sec_lvl(secparam);
 
 	//evaluate the millionaires circuit using Yao
-	test_millionaire_prob_circuit(role, address, port, seclvl, 1, 32,
+	test_millionaire_prob_circuit(role, address, port, seclvl, 32,
 			nthreads, mt_alg, S_YAO);
 	//evaluate the millionaires circuit using GMW
-	//test_millionaire_prob_circuit(role, address, seclvl, 1, 32,
+	//test_millionaire_prob_circuit(role, address, port, seclvl, 32,
 	//		nthreads, mt_alg, S_BOOL);
 
 	return 0;

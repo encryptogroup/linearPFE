@@ -2,17 +2,17 @@
  \file 		sharing.h
  \author	michael.zohner@ec-spride.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
-			Copyright (C) 2015 Engineering Cryptographic Protocols Group, TU Darmstadt
+			Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
 			This program is free software: you can redistribute it and/or modify
-			it under the terms of the GNU Affero General Public License as published
-			by the Free Software Foundation, either version 3 of the License, or
-			(at your option) any later version.
-			This program is distributed in the hope that it will be useful,
-			but WITHOUT ANY WARRANTY; without even the implied warranty of
-			MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-			GNU Affero General Public License for more details.
-			You should have received a copy of the GNU Affero General Public License
-			along with this program. If not, see <http://www.gnu.org/licenses/>.
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
  \brief		Sharing class.
  A virtual class that contains the methods which the sharing
  schemes have to implement
@@ -48,7 +48,7 @@ public:
 
 	 \brief 		Initialises the members of the class.
 	 */
-	Sharing(e_sharing context, e_role role, uint32_t sharebitlen, ABYCircuit* circuit, crypto* crypt);
+	Sharing(e_sharing context, e_role role, uint32_t sharebitlen, ABYCircuit* circuit, crypto* crypt, const std::string& circdir = ABY_CIRCUIT_DIR);
 
 	/**
 	 Destructor of class.
@@ -245,6 +245,7 @@ protected:
 	uint32_t m_nTypeBitLen; /** Bit-length of the arithmetic shares in arithsharing */
 	uint64_t m_nFilePos;/**< Variable which stores the position of the file pointer. */
 	ePreCompPhase m_ePhaseValue;/**< Variable storing the current Precomputation Mode */
+	const std::string m_cCircuitFileDir; /** Storing path to .aby circuit files (e.g. floating point) */
 
 };
 

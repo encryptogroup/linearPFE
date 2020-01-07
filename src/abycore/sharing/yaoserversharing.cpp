@@ -2,17 +2,17 @@
  \file 		yaoserversharing.cpp
  \author	michael.zohner@ec-spride.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
-			Copyright (C) 2015 Engineering Cryptographic Protocols Group, TU Darmstadt
+			Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
 			This program is free software: you can redistribute it and/or modify
-			it under the terms of the GNU Affero General Public License as published
-			by the Free Software Foundation, either version 3 of the License, or
-			(at your option) any later version.
-			This program is distributed in the hope that it will be useful,
-			but WITHOUT ANY WARRANTY; without even the implied warranty of
-			MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-			GNU Affero General Public License for more details.
-			You should have received a copy of the GNU Affero General Public License
-			along with this program. If not, see <http://www.gnu.org/licenses/>.
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
  \brief		Yao Server Sharing class implementation.
  */
 
@@ -836,10 +836,10 @@ void YaoServerSharing::PrecomputeGC(std::deque<uint32_t>& queue, ABYSetup* setup
 #endif
 			EvaluateConversionGate(queue[i]);
 		} else if (gate->type == G_CONSTANT) {
+#ifdef KM11_GARBLING
 			//assign 0 and 1 gates
 			UGATE_T constval = gate->gs.constval;
 			InstantiateGate(gate);
-#ifdef KM11_GARBLING
 			std::cout << "constant" << constval << " - " << gate->nvals << '\n';
 			assert(gate->nvals == 1);
 			assert(constval == 0 || constval == 1);
@@ -865,10 +865,7 @@ void YaoServerSharing::PrecomputeGC(std::deque<uint32_t>& queue, ABYSetup* setup
 			}
 #endif
 #else
-			memset(gate->gs.yinput.outKey, 0, m_nSecParamBytes * gate->nvals);
-			for(uint32_t i = 0; i < gate->nvals; i++) {
-				gate->gs.yinput.pi[i] = (constval>>i) & 0x01;
-			}
+			EvaluateConstantGate(gate);
 #endif
 #ifdef DEBUGYAOSERVER
 			std::cout << "Assigned key to constant gate " << queue[i] << " (" << (uint32_t) gate->gs.yinput.pi[0] << ") : ";
@@ -1676,12 +1673,13 @@ void YaoServerSharing::GarbleUniversalGate(GATE* ggate, uint32_t pos, GATE* glef
 #ifdef DEBUGYAOSERVER
 		std::cout << " encrypting : ";
 		//PrintKey(m_bOKeyBuf[outkey]);
+		PrintKey(m_bOKeyBuf[0]); // TODO: check that we print the right value
 		std::cout << " using: ";
 		PrintKey(m_bLMaskBuf[i>>1]);
 		std::cout << " (" << (uint32_t) gleft->gs.yinput.pi[pos] << ") and : ";
 		PrintKey(m_bRMaskBuf[i&0x01]);
 		std::cout << " (" << (uint32_t) gright->gs.yinput.pi[pos] << ") to : ";
-		PrintKey(univ_table);
+		PrintKey(univ_table); // TODO: check that we print the right value
 		std::cout << std::endl;
 #endif
 	}
@@ -1695,6 +1693,20 @@ void YaoServerSharing::CollectClientOutputShares() {
 			m_vOutputShareSndBuf.SetBit(m_nOutputShareSndSize, !!((m_vGates[out.front()].gs.val[j / GATE_T_BITS]) & ((UGATE_T) 1 << (j % GATE_T_BITS))));
 		}
 		out.pop_front();
+	}
+}
+
+void YaoServerSharing::EvaluateConstantGate(GATE* gate) {
+	//assign 0 and 1 gates
+	UGATE_T constval = gate->gs.constval;
+	InstantiateGate(gate);
+	memset(gate->gs.yinput.outKey, 0, m_nSecParamBytes * gate->nvals);
+	for (uint32_t i = 0; i < gate->nvals; ++i) {
+		if(constval == 1L) {
+			gate->gs.yinput.pi[i] = 1;
+		} else {
+			gate->gs.yinput.pi[i] = 0;
+		}
 	}
 }
 

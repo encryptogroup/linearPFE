@@ -2,17 +2,17 @@
  \file 		boolsharing.cpp
  \author	michael.zohner@ec-spride.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
-			Copyright (C) 2015 Engineering Cryptographic Protocols Group, TU Darmstadt
+			Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
 			This program is free software: you can redistribute it and/or modify
-			it under the terms of the GNU Affero General Public License as published
-			by the Free Software Foundation, either version 3 of the License, or
-			(at your option) any later version.
-			This program is distributed in the hope that it will be useful,
-			but WITHOUT ANY WARRANTY; without even the implied warranty of
-			MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-			GNU Affero General Public License for more details.
-			You should have received a copy of the GNU Affero General Public License
-			along with this program. If not, see <http://www.gnu.org/licenses/>.
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
  \brief		Bool sharing class implementation.
  */
 #include "boolsharing.h"
@@ -43,7 +43,7 @@ void BoolSharing::Init() {
 	m_nInputShareRcvSize = 0;
 	m_nOutputShareRcvSize = 0;
 
-	m_cBoolCircuit = new BooleanCircuit(m_pCircuit, m_eRole, m_eContext);
+	m_cBoolCircuit = new BooleanCircuit(m_pCircuit, m_eRole, m_eContext, m_cCircuitFileDir);
 
 #ifdef BENCHBOOLTIME
 	m_nCombTime = 0;
@@ -349,10 +349,10 @@ void BoolSharing::PrepareSetupPhaseOPLUT(ABYSetup* setup) {
 }
 
 
-void BoolSharing::PerformSetupPhase(ABYSetup* setup) {
+void BoolSharing::PerformSetupPhase([[maybe_unused]] ABYSetup* setup) {
 	//Do nothing
 }
-void BoolSharing::FinishSetupPhase(ABYSetup* setup) {
+void BoolSharing::FinishSetupPhase([[maybe_unused]]  ABYSetup* setup) {
 	if (m_nTotalNumMTs == 0 && m_nOPLUT_Tables == 0)
 		return;
 
@@ -365,7 +365,7 @@ void BoolSharing::FinishSetupPhase(ABYSetup* setup) {
 	//Delete the X values for OP-LUT of the sender when pre-computing the OTs
 	for(auto it=m_vOP_LUT_data.begin(); it!=m_vOP_LUT_data.end(); it++) {
 		if(it->second->n_gates > 0 && m_eRole == SERVER) {
-			for(uint32_t i = 0; i < 1<<it->second->n_inbits; i++) {
+			for(uint32_t i = 0; i < (uint32_t) 1<<it->second->n_inbits; i++) {
 				it->second->rot_OT_vals[i]->delCBitVector();
 			}
 			free(it->second->rot_OT_vals);
@@ -708,15 +708,21 @@ inline void BoolSharing::EvaluateConstantGate(uint32_t gateid) {
 	InstantiateGate(gate);
 	value = value * (m_eRole != CLIENT);
 
-	for (uint32_t i = 0; i < ceil_divide(gate->nvals, GATE_T_BITS); i++) {
-		gate->gs.val[i] = value;
-		if(value) {
-			gate->gs.val[i] = ~(0L);
-		}
+	uint32_t valsize = ceil_divide(gate->nvals, GATE_T_BITS);
+	UGATE_T setval;
+	if(value == 1L) {
+		setval = ~(0L);
+	} else {
+		setval = 0L;
 	}
-	if(gate->nvals % GATE_T_BITS != 0) {
-		gate->gs.val[ceil_divide(gate->nvals, GATE_T_BITS)-1] &= ((1L<<(gate->nvals%64)) -1L);
+	for (uint32_t i = 0; i < valsize; ++i) {
+		gate->gs.val[i] = setval;
 	}
+	uint32_t valmod = gate->nvals % GATE_T_BITS;
+	if(valmod != 0) {
+		gate->gs.val[valsize - 1] &= (1L << valmod) - 1L;
+	}
+
 #ifdef DEBUGBOOL
 		std::cout << "Constant gate value: "<< value << std::endl;
 #endif

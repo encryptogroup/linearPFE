@@ -2,17 +2,17 @@
  \file		arithsharing.cpp
  \author	michael.zohner@ec-spride.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
- Copyright (C) 2015 Engineering Cryptographic Protocols Group, TU Darmstadt
- This program is free software: you can redistribute it and/or modify
- it under the terms of the GNU Affero General Public License as published
- by the Free Software Foundation, either version 3 of the License, or
- (at your option) any later version.
- This program is distributed in the hope that it will be useful,
- but WITHOUT ANY WARRANTY; without even the implied warranty of
- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- GNU Affero General Public License for more details.
- You should have received a copy of the GNU Affero General Public License
- along with this program. If not, see <http://www.gnu.org/licenses/>.
+ Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
+			This program is free software: you can redistribute it and/or modify
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
  \brief		Arithmetic Sharing class implementation
  */
 
@@ -156,12 +156,12 @@ void ArithSharing<T>::PrepareSetupPhase(ABYSetup* setup) {
 }
 
 template<typename T>
-void ArithSharing<T>::PerformSetupPhase(ABYSetup* setup) {
+void ArithSharing<T>::PerformSetupPhase([[maybe_unused]] ABYSetup* setup) {
 	//Do nothing
 }
 
 template<typename T>
-void ArithSharing<T>::FinishSetupPhase(ABYSetup* setup) {
+void ArithSharing<T>::FinishSetupPhase([[maybe_unused]] ABYSetup* setup) {
 #ifdef DEBUGARITH
 	for(uint32_t i = 0; i < m_nMTs; i++) {
 		std::cout << "Output from OT: A: " << (uint64_t) m_vA[0].template Get<T>(i * m_nTypeBitLen, m_nTypeBitLen) << ", B: " << (uint64_t) m_vB[0].template Get<T>(i * m_nTypeBitLen, m_nTypeBitLen)
@@ -188,16 +188,14 @@ template<typename T>
 void ArithSharing<T>::InitMTs() {
 	m_vMTIdx.resize(1, 0);
 	m_vMTStartIdx.resize(1, 0);
+	m_vA.resize(1);
 	m_vC.resize(1);
 	m_vB.resize(1);
-
-	m_vC[0].Create(m_nMTs, m_nTypeBitLen);
-	m_vB[0].Create(m_nMTs, m_nTypeBitLen, m_cCrypto);
-
-	m_vA.resize(1);
 	m_vS.resize(1);
 
 	m_vA[0].Create(m_nMTs, m_nTypeBitLen, m_cCrypto);
+	m_vB[0].Create(m_nMTs, m_nTypeBitLen, m_cCrypto);
+	m_vC[0].Create(m_nMTs, m_nTypeBitLen);
 	m_vS[0].Create(m_nMTs, m_nTypeBitLen);
 
 	m_vD_snd.resize(1);

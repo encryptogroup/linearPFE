@@ -2,17 +2,17 @@
  \file 		innerproduct.cpp
  \author 	sreeram.sadasivam@cased.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
- Copyright (C) 2015 Engineering Cryptographic Protocols Group, TU Darmstadt
- This program is free software: you can redistribute it and/or modify
- it under the terms of the GNU Affero General Public License as published
- by the Free Software Foundation, either version 3 of the License, or
- (at your option) any later version.
- This program is distributed in the hope that it will be useful,
- but WITHOUT ANY WARRANTY; without even the implied warranty of
- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- GNU Affero General Public License for more details.
- You should have received a copy of the GNU Affero General Public License
- along with this program. If not, see <http://www.gnu.org/licenses/>.
+ Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
+			This program is free software: you can redistribute it and/or modify
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
  \brief		Implementation of the Inner Product using ABY Framework.
  */
 
@@ -20,8 +20,8 @@
 #include "../../../abycore/sharing/sharing.h"
 
 int32_t test_inner_product_circuit(e_role role, const std::string& address, uint16_t port, seclvl seclvl,
-		uint32_t nvals, uint32_t bitlen, uint32_t nthreads, e_mt_gen_alg mt_alg,
-		e_sharing sharing, uint32_t num) {
+		uint32_t numbers, uint32_t bitlen, uint32_t nthreads, e_mt_gen_alg mt_alg,
+		e_sharing sharing) {
 
 	/**
 	 Step 1: Create the ABYParty object which defines the basis of all the
@@ -57,8 +57,8 @@ int32_t test_inner_product_circuit(e_role role, const std::string& address, uint
 
 	uint16_t output, v_sum = 0;
 
-	std::vector<uint16_t> xvals(num);
-	std::vector<uint16_t> yvals(num);
+	std::vector<uint16_t> xvals(numbers);
+	std::vector<uint16_t> yvals(numbers);
 
 	uint32_t i;
 	srand(time(NULL));
@@ -73,7 +73,7 @@ int32_t test_inner_product_circuit(e_role role, const std::string& address, uint
 	 The values for the party different from role is ignored,
 	 but PutINGate() must always be called for both roles.
 	 */
-	for (i = 0; i < num; i++) {
+	for (i = 0; i < numbers; i++) {
 
 		x = rand();
 		y = rand();
@@ -84,15 +84,15 @@ int32_t test_inner_product_circuit(e_role role, const std::string& address, uint
 		yvals[i] = y;
 	}
 
-	s_x_vec = circ->PutSIMDINGate(num, xvals.data(), 16, SERVER);
-	s_y_vec = circ->PutSIMDINGate(num, yvals.data(), 16, CLIENT);
+	s_x_vec = circ->PutSIMDINGate(numbers, xvals.data(), 16, SERVER);
+	s_y_vec = circ->PutSIMDINGate(numbers, yvals.data(), 16, CLIENT);
 
 	/**
 	 Step 7: Call the build method for building the circuit for the
 	 problem by passing the shared objects and circuit object.
 	 Don't forget to type cast the circuit object to type of share
 	 */
-	s_out = BuildInnerProductCircuit(s_x_vec, s_y_vec, num,
+	s_out = BuildInnerProductCircuit(s_x_vec, s_y_vec, numbers,
 			(ArithmeticCircuit*) circ);
 
 	/**
@@ -124,7 +124,7 @@ int32_t test_inner_product_circuit(e_role role, const std::string& address, uint
 /*
  Constructs the inner product circuit. num multiplications and num additions.
  */
-share* BuildInnerProductCircuit(share *s_x, share *s_y, uint32_t num, ArithmeticCircuit *ac) {
+share* BuildInnerProductCircuit(share *s_x, share *s_y, uint32_t numbers, ArithmeticCircuit *ac) {
 	uint32_t i;
 
 	// pairwise multiplication of all input values
@@ -135,7 +135,7 @@ share* BuildInnerProductCircuit(share *s_x, share *s_y, uint32_t num, Arithmetic
 
 	// add up the individual multiplication results and store result on wire 0
 	// in arithmetic sharing ADD is for free, and does not add circuit depth, thus simple sequential adding
-	for (i = 1; i < num; i++) {
+	for (i = 1; i < numbers; i++) {
 		s_x->set_wire_id(0, ac->PutADDGate(s_x->get_wire_id(0), s_x->get_wire_id(i)));
 	}
 

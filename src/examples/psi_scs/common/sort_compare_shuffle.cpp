@@ -2,17 +2,17 @@
  \file 		sort_compare_shuffle.cpp
  \author 	michael.zohner@ec-spride.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
-			Copyright (C) 2015 Engineering Cryptographic Protocols Group, TU Darmstadt
+			Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
 			This program is free software: you can redistribute it and/or modify
-			it under the terms of the GNU Affero General Public License as published
-			by the Free Software Foundation, either version 3 of the License, or
-			(at your option) any later version.
-			This program is distributed in the hope that it will be useful,
-			but WITHOUT ANY WARRANTY; without even the implied warranty of
-			MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-			GNU Affero General Public License for more details.
-			You should have received a copy of the GNU Affero General Public License
-			along with this program. If not, see <http://www.gnu.org/licenses/>.
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
  \brief		Implementation of ABYSetIntersection.
  */
 
@@ -37,10 +37,7 @@ int32_t test_psi_scs_circuit(e_role role, const std::string& address, uint16_t p
 	uint64_t mask = ((uint64_t) 1 << bitlen)-1;
 
 	e_sharing sort, permute;
-	if(prot_version == 0) {
-		sort = S_BOOL;
-		permute = S_BOOL;
-	} else if (prot_version == 1) {
+	if (prot_version == 1) {
 		sort = S_YAO;
 		permute = S_YAO;
 	} else if (prot_version == 2) {
@@ -49,7 +46,10 @@ int32_t test_psi_scs_circuit(e_role role, const std::string& address, uint16_t p
 	} else if (prot_version == 3) {
 		sort = S_YAO;
 		permute = S_YAO_REV;
-	}
+	} else { // prot_version == 0 and others
+        sort = S_BOOL;
+		permute = S_BOOL;
+    }
 
 	//vector<uint32_t> sel_bits(nswapgates);
 

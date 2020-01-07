@@ -2,17 +2,17 @@
  \file 		sharing.cpp
  \author	michael.zohner@ec-spride.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
-			Copyright (C) 2015 Engineering Cryptographic Protocols Group, TU Darmstadt
+			Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
 			This program is free software: you can redistribute it and/or modify
-			it under the terms of the GNU Affero General Public License as published
-			by the Free Software Foundation, either version 3 of the License, or
-			(at your option) any later version.
-			This program is distributed in the hope that it will be useful,
-			but WITHOUT ANY WARRANTY; without even the implied warranty of
-			MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-			GNU Affero General Public License for more details.
-			You should have received a copy of the GNU Affero General Public License
-			along with this program. If not, see <http://www.gnu.org/licenses/>.
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
  \brief		Sharing class implementation.
  */
 #include "sharing.h"
@@ -38,7 +38,7 @@ namespace filesystem = std::experimental::filesystem;
 #include <iterator>
 #include <boost/algorithm/hex.hpp>
 
-Sharing::Sharing(e_sharing context, e_role role, uint32_t sharebitlen, ABYCircuit* circuit, crypto* crypt) :
+Sharing::Sharing(e_sharing context, e_role role, uint32_t sharebitlen, ABYCircuit* circuit, crypto* crypt, const std::string& circdir) :
 	m_eContext(context),
 	m_nShareBitLen(sharebitlen),
 	m_pCircuit(circuit),
@@ -48,7 +48,8 @@ Sharing::Sharing(e_sharing context, e_role role, uint32_t sharebitlen, ABYCircui
 	m_nSecParamBytes(ceil_divide(m_cCrypto->get_seclvl().symbits, 8)),
 	m_nTypeBitLen(sharebitlen),
 	m_nFilePos(-1),
-	m_ePhaseValue(ePreCompDefault)
+	m_ePhaseValue(ePreCompDefault),
+	m_cCircuitFileDir(circdir)
 {}
 
 

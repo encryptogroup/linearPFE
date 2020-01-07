@@ -1,8 +1,19 @@
-/*
- * simple_hashing.cpp
- *
- *  Created on: Oct 8, 2014
- *      Author: mzohner
+/**
+ \file 		simple_hashing.cpp
+ \author	michael.zohner@ec-spride.de
+ \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
+			Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
+			This program is free software: you can redistribute it and/or modify
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
+ \brief
  */
 
 #include <iostream>
@@ -35,9 +46,9 @@ uint8_t* simple_hashing(uint8_t* elements, uint32_t neles, uint32_t bitlen, uint
 	}
 
 	for(i = 0; i < ntasks; i++) {
-		// old call, but init_hash_table does not use #elements 
+		// old call, but init_hash_table does not use #elements
 		// init_hash_table(&table[i], ceil_divide(neles, ntasks), &hs, *maxbinsize);
-		
+
 		init_hash_table(&table[i], &hs, *maxbinsize);
 	}
 
@@ -186,19 +197,16 @@ void free_hash_table(sht_ctx* table) {
 }
 
 inline uint32_t get_max_bin_size(uint32_t nbins, uint32_t neles) {
-	if(ceil_divide(neles, nbins) < 3) {
-		if(neles >= (1<<24))
-			return 27;
-		if(neles >= (1<<20))
-			return 26;
-		if(neles >= (1<<16))
-			return 25;
-		if(neles >= (1<<12))
-			return 24;
-		if(neles >= (1<<8))
-			return 23;
-	} else
-		return 6*std::max((uint32_t) ceil_divide(neles, nbins), (uint32_t) 3);
+	if (ceil_divide(neles, nbins) < 3) {
+		if (neles >= (1 << 24)) return 27;
+		if (neles >= (1 << 20)) return 26;
+		if (neles >= (1 << 16)) return 25;
+		if (neles >= (1 << 12)) return 24;
+		if (neles >= (1 << 8))	return 23;
+		else return 22; //TODO is 22 a good max bin size in this case?
+	} else {
+		return 6 * ceil_divide(neles, nbins);
+	}
 }
 
 void increase_max_bin_size(sht_ctx* table, uint32_t valbytelen) {

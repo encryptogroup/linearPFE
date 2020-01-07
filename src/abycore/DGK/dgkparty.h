@@ -2,22 +2,28 @@
  \file 		dgkparty.h
  \author 	daniel.demmler@ec-spride.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
-			Copyright (C) 2015 Engineering Cryptographic Protocols Group, TU Darmstadt
+			Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
 			This program is free software: you can redistribute it and/or modify
-			it under the terms of the GNU Affero General Public License as published
-			by the Free Software Foundation, either version 3 of the License, or
-			(at your option) any later version.
-			This program is distributed in the hope that it will be useful,
-			but WITHOUT ANY WARRANTY; without even the implied warranty of
-			MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-			GNU Affero General Public License for more details.
-			You should have received a copy of the GNU Affero General Public License
-			along with this program. If not, see <http://www.gnu.org/licenses/>.
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
  \brief		DGKParty
 */
 
 #ifndef __DGKPARTY_H__
 #define __DGKPARTY_H__
+
+#define DGK_CHECKMT 0
+#define DGK_DEBUG 0
+#define DGK_BENCH 0
+#define DGK_NETDEBUG 0
+#define DGK_WINDOWSIZE 65536 //maximum size of a network packet in Byte
 
 #include <gmp.h>
 #include <vector>
@@ -26,27 +32,32 @@
 #include <ENCRYPTO_utils/crypto/dgk.h>
 #include <ENCRYPTO_utils/powmod.h>
 #include <ENCRYPTO_utils/channel.h>
+#include <ENCRYPTO_utils/timer.h>
+#include <ENCRYPTO_utils/utils.h>
+#if DGK_DEBUG || DGK_BENCH
+#include <iostream>
+#endif
 
 class DGKParty {
 public:
-	DGKParty(uint32_t DGKbits, uint32_t sharelen, uint32_t readkey);
-	DGKParty(uint32_t DGKbits, uint32_t sharelen, channel* chan, uint32_t readkey);
+	DGKParty(uint32_t DGKModulusBits, uint32_t shareBitLength, uint32_t readkey);
+	DGKParty(uint32_t DGKModulusBits, uint32_t shareBitLength, channel* chan, uint32_t readkey);
 	~DGKParty();
 
 	void keyExchange(channel* chan);
 
-	void preCompBench(BYTE * bA, BYTE * bB, BYTE * bC, BYTE * bA1, BYTE * bB1, BYTE * bC1, uint32_t numMTs, channel* chan);
+	void computeArithmeticMTs(BYTE * bA, BYTE * bB, BYTE * bC, BYTE * bA1, BYTE * bB1, BYTE * bC1, uint32_t numMTs, channel* chan);
 
 	void readKey();
 
 	void generateKey();
 
-	void loadNewKey(uint32_t DGKbits, uint32_t sharelen);
+	void loadNewKey(uint32_t DGKModulusBits, uint32_t shareBitLength);
 
 private:
 	uint16_t m_nNumMTThreads;
-	uint16_t m_nShareLength;
-	uint32_t m_nDGKbits;
+	uint16_t m_nShareBitLength;
+	uint32_t m_nDGKModulusBits;
 	uint32_t m_nBuflen;
 
 	// Crypto and GMP PRNG
@@ -63,7 +74,6 @@ private:
 	void receivempz_t(mpz_t t, channel* chan);
 
 	void printBuf(BYTE* b, uint32_t l);
-
 };
 
 #endif //__DGK_PARTY_H__

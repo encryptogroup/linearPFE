@@ -2,17 +2,17 @@
  \file 		bench_operations.cpp
  \author	michael.zohner@ec-spride.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
- Copyright (C) 2015 Engineering Cryptographic Protocols Group, TU Darmstadt
- This program is free software: you can redistribute it and/or modify
- it under the terms of the GNU Affero General Public License as published
- by the Free Software Foundation, either version 3 of the License, or
- (at your option) any later version.
- This program is distributed in the hope that it will be useful,
- but WITHOUT ANY WARRANTY; without even the implied warranty of
- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- GNU Affero General Public License for more details.
- You should have received a copy of the GNU Affero General Public License
- along with this program. If not, see <http://www.gnu.org/licenses/>.
+ Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
+			This program is free software: you can redistribute it and/or modify
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
  \brief		Benchmark Primitive Operations
  */
 
@@ -45,6 +45,7 @@ static const aby_ops_t m_tBenchOps[] = {
 	{ OP_EQ, S_BOOL, "eqbool" },
 	{ OP_MUX, S_BOOL, "muxbool" },
 	{ OP_MUX, S_BOOL, "muxvecbool" },
+	{ OP_INV, S_BOOL, "invbool" },
 
 	{ OP_SBOX, S_BOOL, "sboxsobool" },
 	{ OP_SBOX, S_BOOL, "sboxdobool" },
@@ -58,6 +59,7 @@ static const aby_ops_t m_tBenchOps[] = {
 
 	{ OP_EQ, S_YAO, "eqyao" },
 	{ OP_MUX, S_YAO, "muxyao" },
+	{ OP_INV, S_YAO, "invyao" },
 	{ OP_SBOX, S_YAO, "sboxsoyao" },
 	{ OP_ADD, S_ARITH, "addarith" },
 	{ OP_MUL, S_ARITH, "mularith" },
@@ -142,6 +144,7 @@ int32_t bench_operations(aby_ops_t* bench_ops, uint32_t nops, ABYParty* party, u
 	Circuit *bc, *yc, *ac, *ycr;
 	double op_time, o_time, s_time, o_comm, s_comm;
 	uint32_t non_linears, depth, ynvals, yrnvals;
+	bool aes_remark = false;
 
 	avec = (uint64_t*) malloc(nvals * sizeof(uint64_t));
 	bvec = (uint64_t*) malloc(nvals * sizeof(uint64_t));
@@ -357,6 +360,11 @@ int32_t bench_operations(aby_ops_t* bench_ops, uint32_t nops, ABYParty* party, u
 					for (uint32_t j = 0; j < nvals; j++)
 						verifyvec[j] = (avec[j] + bvec[j]) & typebitmask;
 					break;
+				case OP_INV:
+					shrres = ((BooleanCircuit*) circ)->PutINVGate(shra);
+					for (uint32_t j = 0; j < nvals; j++)
+						verifyvec[j] = avec[j] ^ typebitmask;
+					break;
 				case OP_SBOX:
 					if (bitlen >= 8) {
 						shrsel = new boolshare(8, circ);
@@ -375,7 +383,8 @@ int32_t bench_operations(aby_ops_t* bench_ops, uint32_t nops, ABYParty* party, u
 							verifyvec[j] = (uint64_t) plaintext_aes_sbox[avec[j] & 0xFF]; //(avec[j] + bvec[j]) & typebitmask;
 					}
 					else{
-						std::cout << "AES only works with bitlen >= 8!\t";
+						std::cout << "*\t";
+						aes_remark = true;
 						shrres = shra;
 						for (uint32_t j = 0; j < nvals; j++){
 							verifyvec[j] = avec[j];
@@ -465,6 +474,10 @@ int32_t bench_operations(aby_ops_t* bench_ops, uint32_t nops, ABYParty* party, u
 		if(!detailed)
 			std::cout << std::endl;
 
+	}
+
+	if(aes_remark){
+		std::cout << "\n* =  AES only works with bitlen >= 8" << std::endl;
 	}
 
 	free(avec);

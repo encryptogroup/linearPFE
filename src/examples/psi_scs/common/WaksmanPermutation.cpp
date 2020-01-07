@@ -2,17 +2,17 @@
  \file 		WaksmanPermutation.cpp
  \author 	michael.zohner@ec-spride.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
-			Copyright (C) 2015 Engineering Cryptographic Protocols Group, TU Darmstadt
+			Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
 			This program is free software: you can redistribute it and/or modify
-			it under the terms of the GNU Affero General Public License as published
-			by the Free Software Foundation, either version 3 of the License, or
-			(at your option) any later version.
-			This program is distributed in the hope that it will be useful,
-			but WITHOUT ANY WARRANTY; without even the implied warranty of
-			MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-			GNU Affero General Public License for more details.
-			You should have received a copy of the GNU Affero General Public License
-			along with this program. If not, see <http://www.gnu.org/licenses/>.
+            it under the terms of the GNU Lesser General Public License as published
+            by the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+            ABY is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+            GNU Lesser General Public License for more details.
+            You should have received a copy of the GNU Lesser General Public License
+            along with this program. If not, see <http://www.gnu.org/licenses/>.
  \brief		Implementation of WaksmanPermutation
  */
 #include "WaksmanPermutation.h"
@@ -22,8 +22,9 @@ PermutationNetwork::WaksmanPermutation::~WaksmanPermutation() {
 }
 
 uint32_t estimateGates(uint32_t numGates) {
-	if (numGates == 1)
+	if (numGates == 1){
 		return 0;
+	}
 	else {
 		uint32_t s1count = numGates / 2;
 		uint32_t s2count = (numGates % 2 == 0) ? numGates / 2 - 1 : numGates / 2;
@@ -34,7 +35,7 @@ uint32_t estimateGates(uint32_t numGates) {
 void PermutationNetwork::WaksmanPermutation::program_rec(uint32_t in, uint32_t block, uint32_t* p1, uint32_t* p2, uint32_t* rows, uint32_t* cols) {
 	uint32_t out = rows[in];
 
-	if ((in ^ 1) < m_nNumInputs && rows[in ^ 1] != -1) {
+	if ((in ^ 1) < m_nNumInputs && rows[in ^ 1] != UINT_MAX) {
 		m_PM->setSwitchProgram(s1[in / 2], (block == 0) != (in % 2 == 0));
 		Todo->remove(in / 2);
 	}
@@ -50,17 +51,17 @@ void PermutationNetwork::WaksmanPermutation::program_rec(uint32_t in, uint32_t b
 			m_PM->setSwitchProgram(s2[out / 2], out % 2 == 1);
 		}
 	}
-	rows[in] = -1;
-	cols[out] = -1;
+	rows[in] = UINT_MAX;
+	cols[out] = UINT_MAX;
 
 	uint32_t newout = out ^ 1;
-	if (newout < m_nNumInputs && cols[newout] != -1) {
+	if (newout < m_nNumInputs && cols[newout] != UINT_MAX) {
 		uint32_t newin = cols[newout];
-		cols[newout] = -1;
+		cols[newout] = UINT_MAX;
 		program_rec(newin, block ^ 1, p1, p2, rows, cols);
 	}
 
-	if ((in ^ 1) < m_nNumInputs && rows[in ^ 1] != -1) {
+	if ((in ^ 1) < m_nNumInputs && rows[in ^ 1] != UINT_MAX) {
 		program_rec(in ^ 1, block ^ 1, p1, p2, rows, cols);
 	}
 }
@@ -84,18 +85,18 @@ void PermutationNetwork::WaksmanPermutation::program(uint32_t* perm) {
 	Todo = new TodoList(m_nNumInputs / 2);
 	if (m_nNumInputs % 2 == 1) { // case c+d and b+d
 		program_rec(m_nNumInputs - 1, 1, p1, p2, rows, cols);
-		if (cols[m_nNumInputs - 1] != -1)
+		if (cols[m_nNumInputs - 1] != UINT_MAX)
 			program_rec(cols[m_nNumInputs - 1], 1, p1, p2, rows, cols);
 	}
 
 	if (m_nNumInputs % 2 == 0) { // case a
-		if (cols[m_nNumInputs - 1] != -1)
+		if (cols[m_nNumInputs - 1] != UINT_MAX)
 			program_rec(cols[m_nNumInputs - 1], 1, p1, p2, rows, cols);
-		if (cols[m_nNumInputs - 2] != -1)
+		if (cols[m_nNumInputs - 2] != UINT_MAX)
 			program_rec(cols[m_nNumInputs - 2], 0, p1, p2, rows, cols);
 	}
 
-	for (uint32_t n = Todo->next(); n != -1; n = Todo->next()) {
+	for (uint32_t n = Todo->next(); n != UINT_MAX; n = Todo->next()) {
 		program_rec(2 * n, 0, p1, p2, rows, cols);
 	}
 
