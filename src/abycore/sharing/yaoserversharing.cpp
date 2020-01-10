@@ -21,6 +21,7 @@
 #include <cstdlib>
 #include <ENCRYPTO_utils/utils.h>
 #include <limits.h>
+#include "omp.h"
 
 void YaoServerSharing::InitServer() {
 
@@ -136,7 +137,7 @@ void YaoServerSharing::PrepareSetupPhase(ABYSetup* setup) {
 	assert(m_bEncWireKeys != NULL);
 	assert(m_bEncGG != NULL);
 	m_bTmpWirekeys = (BYTE*) malloc(m_nWireKeyBytes * 2);
-  m_bGTKeys = (BYTE*) malloc(m_nWireKeyBytes * 8);
+	m_bGTKeys = (BYTE*) malloc(m_nWireKeyBytes * 8);
 	m_bTmpGTEntry = (BYTE*) malloc(sizeof(BYTE) * (m_nSecParamBytes + 2 * m_nSymEncPaddingBytes));
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN
 	m_bPublickey = (BYTE*) malloc(2 * (m_nDJNBytes + 1));
@@ -154,7 +155,7 @@ void YaoServerSharing::PrepareSetupPhase(ABYSetup* setup) {
 	m_bEncGG = (BYTE*) malloc((m_nXORGates + m_nANDGates) * 4 * m_nCiphertextSize);
 #endif // KM11_IMPROVED
 	m_bTmpWirekeys = (BYTE*) malloc(m_nWireKeyBytes * 2);
-  m_bGTKeys = (BYTE*) malloc(m_nWireKeyBytes * 8);
+	m_bGTKeys = (BYTE*) malloc(m_nWireKeyBytes * 8);
 	m_bTmpGTEntry = (BYTE*) malloc(sizeof(BYTE) * (m_nSecParamBytes + 2 * m_nSymEncPaddingBytes));
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
 	m_bPublickey = (BYTE*) malloc(m_nCiphertextSize);
@@ -369,7 +370,6 @@ void YaoServerSharing::PerformSetupPhase(ABYSetup* setup) {
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
 	std::cout << "[RECEIVE] m_bEncGG:\t\t" << (m_nANDGates + m_nXORGates) * 4 * m_nCiphertextSize << '\n';
 #ifndef KM11_PIPELINING
-	std::cout << "error: only pipelining is implemented" << '\n';
 	setup->AddReceiveTask(m_bEncGG, (m_nANDGates + m_nXORGates) * 4 * m_nCiphertextSize);
 #endif
 #endif // KM11_CRYPTOSYSTEM
@@ -735,20 +735,30 @@ void YaoServerSharing::CreateAndSendGarbledCircuit(ABYSetup* setup) {
 	setup->AddReceiveTask(m_nEncGGRcvPtr, 4 * m_nCiphertextSize);
 #endif
 
+	#pragma omp parallel for firstprivate(numGates)
 	for (uint32_t i = 0; i < numGates; i++) {
 		GATE* gate = &(m_vGates[i]);
 		assert(gate->type == G_LIN || gate->type == G_NON_LIN || gate->type == G_IN || gate->type == G_OUT);
 		if(gate->type == G_IN) {
-			EvaluateInputGate(i);
+			#pragma omp critical
+			{
+				EvaluateInputGate(i);
+			}
 		} else if (gate->type == G_OUT) {
-			EvaluateOutputGate(gate);
+			#pragma omp critical
+			{
+				EvaluateOutputGate(gate);
+			}
 		} else if (gate->type == G_LIN || gate->type == G_NON_LIN) {
 			EvaluateKM11Gate(i, setup);
 		} else {
-			std::cout << "Gate type not supported by KM11" << '\n';
+			std::cout << "Gate type not supported by KM11" << std::endl;
 			exit(1);
 		}
 	}
+#ifdef _OPENMP
+	m_nGarbledTableCtr += (m_nXORGates + m_nANDGates);
+#endif
 #endif // KM11_CRYPTOSYSTEM
 #else // KM11_GARBLING
 	for (uint32_t i = 0; i < maxdepth; i++) {
@@ -1021,6 +1031,9 @@ void YaoServerSharing::EvaluateKM11Gate(uint32_t gateid, ABYSetup* setup) {
 	struct timespec start, end;
 	uint32_t delta;
 
+	BYTE* GTKeys = (BYTE*) malloc(m_nCiphertextSize * 8);
+	BYTE* tmpWirekeys = (BYTE*) malloc(m_nCiphertextSize * 2);
+
 	// decrypt the encrypted garbled gate (encGG) to obtain the keys required to
 	// create the garbled table
 	// (KM11 approach to hide the wiring of the gates)
@@ -1133,51 +1146,57 @@ void YaoServerSharing::EvaluateKM11Gate(uint32_t gateid, ABYSetup* setup) {
 #endif
 
 	// decrypt encGG
-	// m_bGTKeys: [L0, R0, L0, R1, L1, R0, L1, R1]
-	//            [ 0   1   2   3   4   5   6   7]
+	// GTKeys: [L0, R0, L0, R1, L1, R0, L1, R1]
+	//         [ 0   1   2   3   4   5   6   7]
 	fe* aK = m_cPKCrypto->get_fe();
 	fe* blindedWireKey = m_cPKCrypto->get_fe();
 
+	BYTE* encGGptr = m_bEncGG + (gateid - m_nInputGates) * 4 * m_nCiphertextSize;
+
 	// decrypt L0, L1
-	aK->import_from_bytes(m_nEncGGRcvPtr + 0 * m_nCiphertextSize); // import K
+	//aK->import_from_bytes(m_nEncGGRcvPtr + 0 * m_nCiphertextSize); // import K
+	aK->import_from_bytes(encGGptr + 0 * m_nCiphertextSize); // import K
 	aK->set_pow(aK, m_nECCPrvkey); // K = a * K
-	blindedWireKey->import_from_bytes(m_nEncGGRcvPtr + 1 * m_nCiphertextSize); // import C
+	assert(!((ecc_fe*)aK)->is_infty());
+	blindedWireKey->import_from_bytes(encGGptr + 1 * m_nCiphertextSize); // import C
 
 	// L0 = C - a * K (L0 = Dec(Enc(s0 + b)))
 	blindedWireKey->set_div(blindedWireKey, aK); // L0 = C - S = C - aK
-	blindedWireKey->export_to_bytes(m_bGTKeys);
-	memcpy(m_bGTKeys + 2 * m_nCiphertextSize, m_bGTKeys, m_nCiphertextSize);
+	blindedWireKey->export_to_bytes(GTKeys);
+	memcpy(GTKeys + 2 * m_nCiphertextSize, GTKeys, m_nCiphertextSize);
 
 	blindedWireKey->set_mul(blindedWireKey, m_zR); // L1 = L0 + r
-	blindedWireKey->export_to_bytes(m_bGTKeys + 4 * m_nCiphertextSize);
-	memcpy(m_bGTKeys + 6 * m_nCiphertextSize, m_bGTKeys + 4 * m_nCiphertextSize, m_nCiphertextSize);
+	blindedWireKey->export_to_bytes(GTKeys + 4 * m_nCiphertextSize);
+	memcpy(GTKeys + 6 * m_nCiphertextSize, GTKeys + 4 * m_nCiphertextSize, m_nCiphertextSize);
 
 
 	// decrypt R0, R1
-	aK->import_from_bytes(m_nEncGGRcvPtr + 2 * m_nCiphertextSize);
+	aK->import_from_bytes(encGGptr + 2 * m_nCiphertextSize);
 	aK->set_pow(aK, m_nECCPrvkey); // K = a * K
-	blindedWireKey->import_from_bytes(m_nEncGGRcvPtr + 3 * m_nCiphertextSize);
+	blindedWireKey->import_from_bytes(encGGptr + 3 * m_nCiphertextSize);
 
 	// L0 = C - a * K (L0 = Dec(Enc(s0 + b)))
 	blindedWireKey->set_div(blindedWireKey, aK);
-	blindedWireKey->export_to_bytes(m_bGTKeys + 1 * m_nCiphertextSize);
-	memcpy(m_bGTKeys + 5 * m_nCiphertextSize, m_bGTKeys + 1 * m_nCiphertextSize, m_nCiphertextSize);
+	blindedWireKey->export_to_bytes(GTKeys + 1 * m_nCiphertextSize);
+	memcpy(GTKeys + 5 * m_nCiphertextSize, GTKeys + 1 * m_nCiphertextSize, m_nCiphertextSize);
 
 	blindedWireKey->set_mul(blindedWireKey, m_zR);
-	blindedWireKey->export_to_bytes(m_bGTKeys + 3 * m_nCiphertextSize);
-	memcpy(m_bGTKeys + 7 * m_nCiphertextSize, m_bGTKeys + 3 * m_nCiphertextSize, m_nCiphertextSize);
+	blindedWireKey->export_to_bytes(GTKeys + 3 * m_nCiphertextSize);
+	memcpy(GTKeys + 7 * m_nCiphertextSize, GTKeys + 3 * m_nCiphertextSize, m_nCiphertextSize);
 
-
+#ifndef _OPENMP
+	assert(encGGptr == m_nEncGGRcvPtr);
 	m_nEncGGRcvPtr += 4 * m_nCiphertextSize;
+#endif
 
 	delete aK;
 	delete blindedWireKey;
 
 	// export wirekeys s0, s1
-	m_vWireKeys[gateid]->export_to_bytes(m_bTmpWirekeys);
+	m_vWireKeys[gateid]->export_to_bytes(tmpWirekeys);
 	fe* s1 = m_cPKCrypto->get_fe();
 	s1->set_mul(m_vWireKeys[gateid], m_zR);
-	s1->export_to_bytes(m_bTmpWirekeys + m_nCiphertextSize);
+	s1->export_to_bytes(tmpWirekeys + m_nCiphertextSize);
 #endif // KM11_CRYPTOSYSTEM
 
 	// create garbled table to hide the wirekey pair for this gate (either s0 or s1)
@@ -1188,7 +1207,7 @@ void YaoServerSharing::EvaluateKM11Gate(uint32_t gateid, ABYSetup* setup) {
 	uint32_t const GTEntrySize = m_nCiphertextSize;
 #endif
 
-	uint8_t* table = m_vGarbledCircuit.GetArr() + m_nGarbledTableCtr * KEYS_PER_GATE_IN_TABLE * (GTEntrySize + m_nSymEncPaddingBytes);
+	uint8_t* table = m_vGarbledCircuit.GetArr() + (gateid - m_nInputGates) * KEYS_PER_GATE_IN_TABLE * (GTEntrySize + m_nSymEncPaddingBytes);
 
 	// The server should not have any knowledge about gate type (only use NAND gates).
 	// We use this conditional statement here to be able to evaluate circuits built
@@ -1201,18 +1220,22 @@ void YaoServerSharing::EvaluateKM11Gate(uint32_t gateid, ABYSetup* setup) {
 	}
 
 	// encrypt the 4 garbled table entries
-	sEnc(table + 0 * (GTEntrySize + m_nSymEncPaddingBytes), m_bTmpWirekeys +    0 * GTEntrySize, GTEntrySize,
-			 m_bGTKeys + 0 * GTEntrySize, 2 * GTEntrySize);
-	sEnc(table + 1 * (GTEntrySize + m_nSymEncPaddingBytes), m_bTmpWirekeys + val1 * GTEntrySize, GTEntrySize,
-			 m_bGTKeys + 2 * GTEntrySize, 2 * GTEntrySize);
-	sEnc(table + 2 * (GTEntrySize + m_nSymEncPaddingBytes), m_bTmpWirekeys + val2 * GTEntrySize, GTEntrySize,
-			 m_bGTKeys + 4 * GTEntrySize, 2 * GTEntrySize);
-	sEnc(table + 3 * (GTEntrySize + m_nSymEncPaddingBytes), m_bTmpWirekeys + val3 * GTEntrySize, GTEntrySize,
-			 m_bGTKeys + 6 * GTEntrySize, 2 * GTEntrySize);
+	sEnc(table + 0 * (GTEntrySize + m_nSymEncPaddingBytes), tmpWirekeys +    0 * GTEntrySize, GTEntrySize,
+			GTKeys + 0 * GTEntrySize, 2 * GTEntrySize);
+	sEnc(table + 1 * (GTEntrySize + m_nSymEncPaddingBytes), tmpWirekeys + val1 * GTEntrySize, GTEntrySize,
+			GTKeys + 2 * GTEntrySize, 2 * GTEntrySize);
+	sEnc(table + 2 * (GTEntrySize + m_nSymEncPaddingBytes), tmpWirekeys + val2 * GTEntrySize, GTEntrySize,
+			GTKeys + 4 * GTEntrySize, 2 * GTEntrySize);
+	sEnc(table + 3 * (GTEntrySize + m_nSymEncPaddingBytes), tmpWirekeys + val3 * GTEntrySize, GTEntrySize,
+			GTKeys + 6 * GTEntrySize, 2 * GTEntrySize);
 
+	free(GTKeys);
+	free(tmpWirekeys);
+
+#ifndef _OPENMP
 	m_nGarbledTableCtr++;
-
 	// send (part of) the garbled table if enough gates have been garbled
+
 	if((m_nGarbledTableCtr - m_nGarbledTableSndCtr) >= GARBLED_TABLE_WINDOW) {
 #ifdef KM11_GARBLING
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
@@ -1227,6 +1250,7 @@ void YaoServerSharing::EvaluateKM11Gate(uint32_t gateid, ABYSetup* setup) {
 #endif
 		m_nGarbledTableSndCtr = m_nGarbledTableCtr;
 	}
+#endif
 
 	uint32_t idleft = gate->ingates.inputs.twin.left;
 	uint32_t idright = gate->ingates.inputs.twin.right;
@@ -1315,6 +1339,8 @@ void YaoServerSharing::CreateEncryptedWireKeys(){
 	uint64_t delta_a;
 	uint64_t delta;
 
+	#pragma omp parallel
+	{
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
 	//seal::BatchEncoder bfvWirekeyEncoder(m_nWirekeySEALcontext);
 	seal::Encryptor bfvWirekeyEncryptor(m_nWirekeySEALcontext, m_nWirekeySEALpublicKey);
@@ -1343,6 +1369,7 @@ void YaoServerSharing::CreateEncryptedWireKeys(){
 	uint64_t bufPos = 0;
 	BYTE* buf = m_bEncWireKeys;
 
+	#pragma omp for
 	for (uint64_t i = 0; i < m_nNumberOfKeypairs; i++) {
 		//std::cout << "i " << i << '\n';
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
@@ -1388,6 +1415,8 @@ void YaoServerSharing::CreateEncryptedWireKeys(){
 		clock_gettime(CLOCK_MONOTONIC_RAW, &start);
 #endif
 
+		// TODO: this is not thread safe
+		assert(false);
 		exportCiphertextToBuf(buf, &ciphertextWirekey);
 		buf += m_nBFVciphertextBufLen;
 
@@ -1435,8 +1464,7 @@ void YaoServerSharing::CreateEncryptedWireKeys(){
 		// generate ciphertext (K, C) = (k * P, k * aP + M)
 		k->set_rnd(field_size);
 		m_nECCGeneratorBrick->pow(tmpFE, k); // tmpFE = k * P
-		tmpFE->export_to_bytes(buf);
-		buf += m_nCiphertextSize;
+		tmpFE->export_to_bytes(m_bEncWireKeys + i * 2 * m_nCiphertextSize);
 		m_nECCPubkeyBrick->pow(tmpFE, k); // tmpFE = k * aP
 
 		k->set_rnd(field_size);
@@ -1444,8 +1472,7 @@ void YaoServerSharing::CreateEncryptedWireKeys(){
 		m_nECCGeneratorBrick->pow(m_vWireKeys[i], k); // s0 = k * P
 		s0_enc = m_cPKCrypto->get_fe();
 		s0_enc->set_mul(tmpFE, m_vWireKeys[i]); // tmpFE = k * aP + M
-		s0_enc->export_to_bytes(buf);
-		buf += m_nCiphertextSize;
+		s0_enc->export_to_bytes(m_bEncWireKeys + i * 2 * m_nCiphertextSize + m_nCiphertextSize);
 #endif // KM11_CRYPTOSYSTEM
 
 		clock_gettime(CLOCK_MONOTONIC_RAW, &mid);
@@ -1491,6 +1518,7 @@ void YaoServerSharing::CreateEncryptedWireKeys(){
 	delete tmpFE;
 	delete s0_enc;
 	delete k;
+	}
 #endif
 }
 

@@ -18,6 +18,7 @@
 #include "yaoclientsharing.h"
 #include "../aby/abysetup.h"
 #include <cstdlib>
+#include "omp.h"
 
 void YaoClientSharing::InitClient() {
 
@@ -542,15 +543,23 @@ void YaoClientSharing::CreateBlindingValues() {
 #endif
 	mpz_clears(b1, b2, NULL);
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
-	for(int i = 0; i < m_cBoolCircuit->GetNumGates(); i++) {
-		num* b1 = m_cPKCrypto->get_rnd_num();
-		num* b2 = m_cPKCrypto->get_rnd_num();
+	#pragma omp parallel
+	{
+		num* b1 = m_cPKCrypto->get_num();
+		num* b2 = m_cPKCrypto->get_num();
 
-		m_vBlindingValues[2 * i] = m_cPKCrypto->get_fe();
-		m_nECCGeneratorBrick->pow(m_vBlindingValues[2 * i], b1);
-		m_vBlindingValues[2 * i + 1] = m_cPKCrypto->get_fe();
-		m_nECCGeneratorBrick->pow(m_vBlindingValues[2 * i + 1], b2);
+		#pragma omp for
+		for(uint32_t i = 0; i < m_cBoolCircuit->GetNumGates(); i++) {
+			((ecc_num*)b1)->set_rnd();
+			((ecc_num*)b2)->set_rnd();
+
+			m_vBlindingValues[2 * i] = m_cPKCrypto->get_fe();
+			m_nECCGeneratorBrick->pow(m_vBlindingValues[2 * i], b1);
+			m_vBlindingValues[2 * i + 1] = m_cPKCrypto->get_fe();
+			m_nECCGeneratorBrick->pow(m_vBlindingValues[2 * i + 1], b2);
+		}
 	}
+
 #endif // KM11_CRYPTOSYSTEM
 }
 
@@ -595,31 +604,35 @@ void YaoClientSharing::PrecomputeBlindingValues() {
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
 	// precompute blinding values
 
-	fe* kaP = m_cPKCrypto->get_fe();
-	ecc_num* k = (ecc_num*) m_cPKCrypto->get_num();
-	uint32_t field_size = ((ecc_field*)m_cPKCrypto)->get_size();
+	#pragma omp parallel
+	{
+		fe* kaP = m_cPKCrypto->get_fe();
+		ecc_num* k = (ecc_num*) m_cPKCrypto->get_num();
+		uint32_t field_size = ((ecc_field*)m_cPKCrypto)->get_size();
 
-	for(int i = 0; i < (m_nXORGates + m_nANDGates); i++) {
-		// encrypt 1st blinding value for gate i
-		k->set_rnd(field_size);
-		m_vEncBlindingValues[4 * i] = m_cPKCrypto->get_fe();
-		m_nECCGeneratorBrick->pow(m_vEncBlindingValues[4 * i], k); // K = kP = k * P
+		#pragma omp for
+		for(int i = 0; i < (m_nXORGates + m_nANDGates); i++) {
+			// encrypt 1st blinding value for gate i
+			k->set_rnd(field_size);
+			m_vEncBlindingValues[4 * i] = m_cPKCrypto->get_fe();
+			m_nECCGeneratorBrick->pow(m_vEncBlindingValues[4 * i], k); // K = kP = k * P
 
-		m_nECCPubkeyBrick->pow(kaP, k); // kaP = k * aP
-		m_vEncBlindingValues[4 * i + 1] = m_cPKCrypto->get_fe();
-		m_vEncBlindingValues[4 * i + 1]->set_mul(kaP, m_vBlindingValues[2 * i]); // C = kaP + M
+			m_nECCPubkeyBrick->pow(kaP, k); // kaP = k * aP
+			m_vEncBlindingValues[4 * i + 1] = m_cPKCrypto->get_fe();
+			m_vEncBlindingValues[4 * i + 1]->set_mul(kaP, m_vBlindingValues[2 * i]); // C = kaP + M
 
-		// encrypt 2nd blinding value for gate i
-		k->set_rnd(field_size);
-		m_vEncBlindingValues[4 * i + 2] = m_cPKCrypto->get_fe();
-		m_nECCGeneratorBrick->pow(m_vEncBlindingValues[4 * i + 2], k); // K = kP = k * P
+			// encrypt 2nd blinding value for gate i
+			k->set_rnd(field_size);
+			m_vEncBlindingValues[4 * i + 2] = m_cPKCrypto->get_fe();
+			m_nECCGeneratorBrick->pow(m_vEncBlindingValues[4 * i + 2], k); // K = kP = k * P
 
-		m_nECCPubkeyBrick->pow(kaP, k); // kaP = k * aP
-		m_vEncBlindingValues[4 * i + 3] = m_cPKCrypto->get_fe();
-		m_vEncBlindingValues[4 * i + 3]->set_mul(kaP, m_vBlindingValues[2 * i + 1]); // C = kaP + M
+			m_nECCPubkeyBrick->pow(kaP, k); // kaP = k * aP
+			m_vEncBlindingValues[4 * i + 3] = m_cPKCrypto->get_fe();
+			m_vEncBlindingValues[4 * i + 3]->set_mul(kaP, m_vBlindingValues[2 * i + 1]); // C = kaP + M
+		}
+		delete kaP;
+		delete k;
 	}
-	delete kaP;
-	delete k;
 #endif // KM11_CRYPTOSYSTEM
 }
 
@@ -895,38 +908,46 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 #endif
 
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
-	fe* s_enc = m_cPKCrypto->get_fe();
+	#pragma omp parallel firstprivate(maxgateid) private(gate)
+	{
+		fe* s_enc = m_cPKCrypto->get_fe();
 
-	for (size_t gateid = m_nInputGates; gateid < maxgateid; gateid++) {
-		gate = &(m_vGates[gateid]);
-		idleft = gate->ingates.inputs.twin.left;
-		idright = gate->ingates.inputs.twin.right;
-		assert(gate->nvals == 1); // KM11 sharing is only implemented for gate->nvals == 1
+		#pragma omp for private(idleft, idright, encGGptr)
+		for (uint32_t gateid = m_nInputGates; gateid < maxgateid; gateid++) {
+			gate = &(m_vGates[gateid]);
+			idleft = gate->ingates.inputs.twin.left;
+			idright = gate->ingates.inputs.twin.right;
+			assert(gate->nvals == 1); // KM11 sharing is only implemented for gate->nvals == 1
+			encGGptr = m_bEncGG + (gateid - m_nInputGates) * 4 * m_nCiphertextSize;
 
-		// blind the 1st component of ciphertext for the left wire key
-		s_enc->import_from_bytes(m_bEncWireKeys + (2 * idleft) * m_nCiphertextSize);
-		s_enc->set_mul(s_enc, m_vEncBlindingValues[4 * (gateid - m_nInputGates)]);
-		s_enc->export_to_bytes(encGGptr);
+			// blind the 1st component of ciphertext for the left wire key
+			s_enc->import_from_bytes(m_bEncWireKeys + (2 * idleft) * m_nCiphertextSize);
+			s_enc->set_mul(s_enc, m_vEncBlindingValues[4 * (gateid - m_nInputGates)]);
+			assert(!((ecc_fe*)s_enc)->is_infty());
+			s_enc->export_to_bytes(encGGptr);
 
-		// blind the 2nd component of ciphertext for the left wire key
-		s_enc->import_from_bytes(m_bEncWireKeys + (2 * idleft + 1) * m_nCiphertextSize);
-		s_enc->set_mul(s_enc, m_vEncBlindingValues[4 * (gateid - m_nInputGates) + 1]);
-		s_enc->export_to_bytes(encGGptr + m_nCiphertextSize);
+			// blind the 2nd component of ciphertext for the left wire key
+			s_enc->import_from_bytes(m_bEncWireKeys + (2 * idleft + 1) * m_nCiphertextSize);
+			s_enc->set_mul(s_enc, m_vEncBlindingValues[4 * (gateid - m_nInputGates) + 1]);
+			assert(!((ecc_fe*)s_enc)->is_infty());
+			s_enc->export_to_bytes(encGGptr + m_nCiphertextSize);
 
-		// blind the 1st component of ciphertext for the right wire key
-		s_enc->import_from_bytes(m_bEncWireKeys + (2 * idright) * m_nCiphertextSize);
-		s_enc->set_mul(s_enc, m_vEncBlindingValues[4 * (gateid - m_nInputGates) + 2]);
-		s_enc->export_to_bytes(encGGptr + 2 * m_nCiphertextSize);
+			// blind the 1st component of ciphertext for the right wire key
+			s_enc->import_from_bytes(m_bEncWireKeys + (2 * idright) * m_nCiphertextSize);
+			s_enc->set_mul(s_enc, m_vEncBlindingValues[4 * (gateid - m_nInputGates) + 2]);
+			assert(!((ecc_fe*)s_enc)->is_infty());
+			s_enc->export_to_bytes(encGGptr + 2 * m_nCiphertextSize);
 
-		// blind the 2nd component of ciphertext for the right wire key
-		s_enc->import_from_bytes(m_bEncWireKeys + (2 * idright + 1) * m_nCiphertextSize);
-		s_enc->set_mul(s_enc, m_vEncBlindingValues[4 * (gateid - m_nInputGates) + 3]);
-		s_enc->export_to_bytes(encGGptr + 3 * m_nCiphertextSize);
+			// blind the 2nd component of ciphertext for the right wire key
+			s_enc->import_from_bytes(m_bEncWireKeys + (2 * idright + 1) * m_nCiphertextSize);
+			s_enc->set_mul(s_enc, m_vEncBlindingValues[4 * (gateid - m_nInputGates) + 3]);
+			assert(!((ecc_fe*)s_enc)->is_infty());
+			s_enc->export_to_bytes(encGGptr + 3 * m_nCiphertextSize);
 
 #ifdef KM11_PIPELINING
-		setup->AddSendTask(encGGptr, 4 * m_nCiphertextSize);
+			setup->AddSendTask(encGGptr, 4 * m_nCiphertextSize);
 #endif
-		encGGptr += 4 * m_nCiphertextSize;
+		}
 	}
 #endif // KM11_CRYPTOSYSTEM
 }

@@ -28,7 +28,6 @@ if(NOT CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
 endif()
 
-
 message("PROJECT_SOURCE_DIR: ${PROJECT_SOURCE_DIR}/extern/ENCRYPTO_utils/CMakeLists.txt")
 
 find_package(ENCRYPTO_utils QUIET)
@@ -63,6 +62,13 @@ find_package(GMP REQUIRED)
 find_package(Threads REQUIRED)
 find_package(Boost 1.66.0 REQUIRED COMPONENTS thread system)
 find_package(SEAL 3.4.5 EXACT REQUIRED)
+
+find_package(OpenMP)
+if(OPENMP_FOUND)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+endif()
 
 add_subdirectory(src/abycore)
 

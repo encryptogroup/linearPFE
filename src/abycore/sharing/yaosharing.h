@@ -64,7 +64,9 @@ typedef struct {
 #define KM11_PRECOMPUTEB
 
 // enable pipelined sending of the encrypted garbled gates
-#define KM11_PIPELINING
+// pipelining has to be disabled when using OpenMP
+// TODO: fix pipelining for OpenMP
+//#define KM11_PIPELINING
 
 // garbled tables with only two entries are not compatible with the KM11
 // protocol since the wiring of the circuit has to be hidden
