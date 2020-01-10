@@ -29,3 +29,6 @@ CTestTestfile.cmake
 
 # VS Code Directory
 .vscode/
+
+# QT Creator
+CMakeLists.txt.user
