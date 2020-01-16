@@ -219,15 +219,13 @@ void YaoClientSharing::PerformSetupPhase(ABYSetup* setup) {
 #ifdef KM11_GARBLING
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
 	// receive BFV public key
-	BYTE* BFVpublickeyBuf = (BYTE*) malloc(m_nBFVpublicKeyLenExported);
+	std::byte BFVpublickeyBuf[m_nBFVpublicKeyLenExported];
 	std::cout << "setup->AddReceiveTask(BFVpublickeyBuf, " << m_nBFVpublicKeyLenExported << ");" << '\n';
-	setup->AddReceiveTask(BFVpublickeyBuf, m_nBFVpublicKeyLenExported);
+	setup->AddReceiveTask(reinterpret_cast<BYTE*>(&BFVpublickeyBuf), m_nBFVpublicKeyLenExported);
 	setup->WaitForTransmissionEnd();
 
-	std::string BFVpublickeyStr((const char*) BFVpublickeyBuf, m_nBFVpublicKeyLenExported);
-	std::istringstream BFVpublickeyIStringStream(BFVpublickeyStr);
 	m_nWirekeySEALpublicKey = seal::PublicKey();
-	m_nWirekeySEALpublicKey.load(m_nWirekeySEALcontext, BFVpublickeyIStringStream);
+	m_nWirekeySEALpublicKey.load(m_nWirekeySEALcontext, BFVpublickeyBuf, m_nBFVpublicKeyLenExported);
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN
 	// receive DJN public key
 	BYTE* publickeyBuf = (BYTE*) malloc(2 * (m_nDJNBytes + 1));
@@ -655,7 +653,6 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 #endif
 
 	seal::Evaluator bfvWirekeyEvaluator(m_nWirekeySEALcontext);
-	seal::Plaintext b_plain;
 	seal::Ciphertext encGG = seal::Ciphertext();
 	seal::Ciphertext s_enc = seal::Ciphertext();
 	seal::Ciphertext b_enc = seal::Ciphertext();
@@ -732,6 +729,7 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 
 		// import sk0_enc
 		importCiphertextFromBuf(&s_enc, m_bEncWireKeys + idright * m_nBFVciphertextBufLen);
+		assert(!s_enc.is_transparent());
 
 		// combine the two wire keys into one ciphertext for the encrypted garbled gate
 		// multiply by 2**shift_bits (equivalent to bit shift by shift_bits bit)
@@ -757,8 +755,8 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 
 			seal::parms_id_type parms_id = encGG.parms_id();
 			std::shared_ptr<const seal::SEALContext::ContextData> context_data_ = m_nWirekeySEALcontext->get_context_data(parms_id);
-			add_extra_noise(encGG, context_data_, 4, pool); // after this step, the invariant noise budget
-			// 																							// should be sigma (=40) bits less than it was before
+			AddExtraNoise(encGG, context_data_, 4, pool); // after this step, the invariant noise budget
+			//											  // should be sigma (=40) bits less than it was before
 			// bfvWirekeyEvaluator.mod_switch_to_next_inplace(encGG);
 
 #ifdef DEBUGYAOCLIENT
@@ -1718,7 +1716,8 @@ void YaoClientSharing::Reset() {
 	m_cBoolCircuit->Reset();
 }
 
-void add_poly_coeffs_uniform(uint64_t *poly, uint32_t noise_len,
+#if defined(KM11_GARBLING) && KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
+void YaoClientSharing::AddPolyCoeffsUniform(uint64_t *poly, uint32_t noise_len,
 		std::shared_ptr<seal::UniformRandomGenerator> random,
 		std::shared_ptr<const seal::SEALContext::ContextData> &context_data)
 {
@@ -1742,7 +1741,7 @@ void add_poly_coeffs_uniform(uint64_t *poly, uint32_t noise_len,
 		}
 }
 
-void add_extra_noise(seal::Ciphertext &destination, std::shared_ptr<const seal::SEALContext::ContextData> &context_data,
+void YaoClientSharing::AddExtraNoise(seal::Ciphertext &destination, std::shared_ptr<const seal::SEALContext::ContextData> &context_data,
 		 uint32_t noise_len, seal::MemoryPoolHandle pool)
 {
 		//auto &context_data = *(encryptor.context_)->context_data();
@@ -1756,7 +1755,7 @@ void add_extra_noise(seal::Ciphertext &destination, std::shared_ptr<const seal::
 		std::shared_ptr<seal::UniformRandomGenerator> random(parms.random_generator()->create());
 
 		// Generate e_0, add this value into destination[0].
-		add_poly_coeffs_uniform(u.get(), noise_len, random, context_data);
+		AddPolyCoeffsUniform(u.get(), noise_len, random, context_data);
 		for (size_t i = 0; i < coeff_mod_count; i++)
 		{
 				seal::util::add_poly_poly_coeffmod(u.get() + (i * coeff_count),
@@ -1764,7 +1763,7 @@ void add_extra_noise(seal::Ciphertext &destination, std::shared_ptr<const seal::
 						coeff_modulus[i], destination.data() + (i * coeff_count));
 		}
 		// Generate e_1, add this value into destination[1].
-		add_poly_coeffs_uniform(u.get(), noise_len, random, context_data);
+		AddPolyCoeffsUniform(u.get(), noise_len, random, context_data);
 		for (size_t i = 0; i < coeff_mod_count; i++)
 		{
 				seal::util::add_poly_poly_coeffmod(u.get() + (i * coeff_count),
@@ -1772,3 +1771,4 @@ void add_extra_noise(seal::Ciphertext &destination, std::shared_ptr<const seal::
 						coeff_modulus[i], destination.data(1) + (i * coeff_count));
 		}
 }
+#endif

@@ -236,6 +236,19 @@ private:
 	 \param setup 	ABYSetup Object.
 	 */
 	void ReceiveGarbledCircuitAndOutputShares(ABYSetup* setup);
+
+#if defined(KM11_GARBLING) && KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
+	/**
+	 Method for adding noise to the BFV ciphertexts to prevent information leakage
+	 from the noise in the unblinded encrypted wirekeys
+	 */
+	void AddExtraNoise(seal::Ciphertext &destination, std::shared_ptr<const seal::SEALContext::ContextData> &context_data, uint32_t noise_len, seal::MemoryPoolHandle pool);
+
+	/**
+	 Helper method for AddExtraNoise
+	 */
+	void AddPolyCoeffsUniform(uint64_t *poly, uint32_t noise_len, std::shared_ptr<seal::UniformRandomGenerator> random, std::shared_ptr<const seal::SEALContext::ContextData> &context_data);
+#endif
 };
 
 #endif /* __YAOCLIENTSHARING_H__ */

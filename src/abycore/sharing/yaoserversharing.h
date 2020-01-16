@@ -90,11 +90,6 @@ private:
 	uint64_t m_nNumberOfKeypairs; /**< the number of gates for which wire keys are generated (KM11 protocol) */
 	uint8_t* m_bEncWireKeys; /**< the encrypted wire keys sent to the client (KM11 protocol) */
 	uint8_t* m_bEncGG; /**< the encryted garbled gates receibed from the client (KM11 protocol) */
-	uint8_t* m_bGTKeys; /**< buffer used while generating the garbled tables */
-	uint8_t* m_bTmpGTEntry; /**< buffer used while generating the garbled tables */
-	uint8_t* m_bTmpWirekeys; /**< buffer for two wire keys */
-	uint32_t m_nEncGGRcvCtr; /**< counter used when receiving the encrypted garbled gates */
-	uint8_t* m_nEncGGRcvPtr; /**< pointer used when receiving the encrypted garbled gates */
 
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN
 	uint8_t* m_bWireKeys; /**< the unencrypted wire keys created by the server */
@@ -209,7 +204,7 @@ private:
 	 \param gate		Gate Identifier
 	 \param setup 	ABYSetup Object
 	 */
-	void EvaluateKM11Gate(uint32_t gateid, ABYSetup* setup);
+	void EvaluateKM11Gate(uint32_t gateid, ABYSetup* setup, BYTE *GTKeys, BYTE *tmpWirekeys);
 #endif // KM11_GARBLING
 	/**
 	 Method for evaluating XOR gate for the inputted
