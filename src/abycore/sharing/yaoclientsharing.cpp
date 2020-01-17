@@ -647,11 +647,14 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 	BYTE* encGGptr = m_bEncGG;
 
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
+	#pragma omp parallel firstprivate(maxgateid) private(gate)
+	{
 #ifdef DEBUGYAOCLIENT
 	struct timespec start, end; uint64_t delta;
 	clock_gettime(CLOCK_MONOTONIC_RAW, &start);
 #endif
 
+	seal::MemoryPoolHandle pool = seal::MemoryManager::GetPool(seal::mm_prof_opt::FORCE_THREAD_LOCAL);
 	seal::Evaluator bfvWirekeyEvaluator(m_nWirekeySEALcontext);
 	seal::Ciphertext encGG = seal::Ciphertext();
 	seal::Ciphertext s_enc = seal::Ciphertext();
@@ -669,14 +672,9 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 		std::cout << "[time] initialisations: " << delta << " microseconds." << std::endl;
 #endif
 
-	//uint32_t numGates = m_cBoolCircuit->GetNumGates();
 	assert((m_nANDGates + m_nXORGates) % 8 == 0);
-	uint32_t ciphertextsProduced = 0;
-	uint32_t ciphertextsSent = 0;
-	const uint32_t ciphertextSendThreshold = 1;
 
-	seal::MemoryPoolHandle pool = seal::MemoryManager::GetPool();
-
+	#pragma omp for private(idleft, idright) schedule(static, 8)
 	for (size_t gateid = m_nInputGates; gateid < maxgateid; gateid++) {
 		gate = &(m_vGates[gateid]);
 		idleft = gate->ingates.inputs.twin.left;
@@ -767,13 +765,11 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 #endif
 
 			// write the ciphertext containing 8 encrypted garbled gates to the m_bEncGG buffer
-			exportCiphertextToBuf(encGGptr, &encGG);
-			ciphertextsProduced++;
+			exportCiphertextToBuf(m_bEncGG + (gateid-m_nInputGates-7)/8 * m_nBFVciphertextBufLen, &encGG);
 
 #ifdef KM11_PIPELINING
-			setup->AddSendTask(encGGptr, m_nBFVciphertextBufLen);
+			setup->AddSendTask(m_bEncGG + (gateid-m_nInputGates-7)/8 * m_nBFVciphertextBufLen, m_nBFVciphertextBufLen);
 #endif
-			encGGptr += m_nBFVciphertextBufLen;
 		}
 
 #ifdef DEBUGYAOCLIENT
@@ -781,6 +777,7 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 		delta = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_nsec - start.tv_nsec) / 1000;
 		std::cout << "[time] 2x export " << delta << " microseconds." << std::endl;
 #endif
+	}
 	}
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN
 #ifdef KM11_IMPROVED

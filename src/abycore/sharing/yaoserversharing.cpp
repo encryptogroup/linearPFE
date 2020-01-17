@@ -678,7 +678,7 @@ void YaoServerSharing::CreateAndSendGarbledCircuit(ABYSetup* setup) {
 		assert(GTKeys != NULL);
 		assert(tmpWirekeys != NULL);
 
-		#pragma omp for schedule(static, 1024) // has to be a multiple of 8 (every ciphertext contains wirekeys for 8 gates)
+		#pragma omp for schedule(static, 8) // has to be a multiple of 8 (every ciphertext contains wirekeys for 8 gates)
 		for (uint32_t i = m_nInputGates; i < m_nInputGates + m_nANDGates + m_nXORGates; i++) {
 			GATE* gate = &(m_vGates[i]);
 			assert(gate->type == G_LIN || gate->type == G_NON_LIN); //gate->type == G_CONSTANT);
