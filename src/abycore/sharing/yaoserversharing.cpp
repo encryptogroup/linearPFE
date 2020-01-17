@@ -158,9 +158,6 @@ void YaoServerSharing::PrepareSetupPhase(ABYSetup* setup) {
 	// ECC ciphertexts consist of two ECC field elements (K, C) per wire key
 	m_bEncWireKeys = (BYTE*) malloc(m_nNumberOfKeypairs * 2 * m_nCiphertextSize);
 	m_bEncGG = (BYTE*) malloc((m_nXORGates + m_nANDGates) * 4 * m_nCiphertextSize);
-	assert("rewrite for OpenMP", false);
-	m_bGTKeys = (BYTE*) malloc(m_nCiphertextSize * 8);
-	m_bTmpWirekeys = (BYTE*) malloc(m_nCiphertextSize * 2);
 #endif // KM11_CRYPTOSYSTEM
 
 	/* Preset the number of input bits for client and server */
@@ -432,7 +429,11 @@ void YaoServerSharing::PerformSetupPhase(ABYSetup* setup) {
 #endif
 #endif
 
+	clock_gettime(CLOCK_MONOTONIC_RAW, &start);
 	CreateAndSendGarbledCircuit(setup);
+	clock_gettime(CLOCK_MONOTONIC_RAW, &end);
+	delta = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_nsec - start.tv_nsec) / 1000;
+	std::cout << "[time createGC] creating the GC took " << delta << " microseconds." << std::endl;
 }
 
 void YaoServerSharing::FinishSetupPhase(ABYSetup* setup) {
@@ -659,7 +660,13 @@ void YaoServerSharing::CreateAndSendGarbledCircuit(ABYSetup* setup) {
 	setup->AddReceiveTask(m_nEncGGRcvPtr, 1 * m_nBFVciphertextBufLen);
 #endif
 
-	#pragma omp parallel default(none) firstprivate(setup, numGates, m_vR) shared(std::cout)
+	for(uint32_t i = 0; i < m_nInputGates; i++) {
+		GATE* gate = &(m_vGates[i]);
+		assert(gate->type == G_IN);
+		EvaluateInputGate(i);
+	}
+
+	#pragma omp parallel firstprivate(setup, numGates, m_bEncGG) shared(std::cout)
 	{
 		seal::Ciphertext encGG = seal::Ciphertext();
 		encGG.resize(m_nWirekeySEALcontext, 2);
@@ -671,23 +678,11 @@ void YaoServerSharing::CreateAndSendGarbledCircuit(ABYSetup* setup) {
 		assert(GTKeys != NULL);
 		assert(tmpWirekeys != NULL);
 
-	#pragma omp for
-	for (uint32_t i = 0; i < numGates; i++) {
-		GATE* gate = &(m_vGates[i]);
-		assert(gate->type == G_LIN || gate->type == G_NON_LIN || gate->type == G_IN || gate->type == G_OUT); //gate->type == G_CONSTANT);
-		if(gate->type == G_IN) {
-			#pragma omp critical
-			{
-				EvaluateInputGate(i);
-			}
-		} else if (gate->type == G_OUT) {
-			#pragma omp critical
-			{
-				EvaluateOutputGate(gate);
-			}
-		} else if (gate->type == G_LIN || gate->type == G_NON_LIN) {
-			#pragma omp critical
-			{
+		#pragma omp for schedule(static, 1024) // has to be a multiple of 8 (every ciphertext contains wirekeys for 8 gates)
+		for (uint32_t i = m_nInputGates; i < m_nInputGates + m_nANDGates + m_nXORGates; i++) {
+			GATE* gate = &(m_vGates[i]);
+			assert(gate->type == G_LIN || gate->type == G_NON_LIN); //gate->type == G_CONSTANT);
+
 			if (i % 8 == 0) {
 #ifdef KM11_PIPELINING
 					setup->WaitForTransmissionEnd();
@@ -725,43 +720,71 @@ void YaoServerSharing::CreateAndSendGarbledCircuit(ABYSetup* setup) {
 			memcpy(GTKeys + 7 * m_nWireKeyBytes, GTKeys + 3 * m_nWireKeyBytes, m_nWireKeyBytes);
 
 			EvaluateKM11Gate(i, setup, GTKeys, tmpWirekeys);
-			}
-		} else {
-			std::cout << "Gate type not supported by KM11" << '\n';
-			exit(1);
 		}
-	}
 
 		free(GTKeys);
 		free(tmpWirekeys);
 	}
+
+	for (uint32_t i = m_nInputGates; i < m_nInputGates + m_nANDGates + m_nXORGates; i++) {
+		GATE* gate = &(m_vGates[i]);
+		uint32_t idleft = gate->ingates.inputs.twin.left;
+		uint32_t idright = gate->ingates.inputs.twin.right;
+		UsedGate(idleft);
+		UsedGate(idright);
+		InstantiateGate(gate);
+	}
+
+
+	for(uint32_t i = m_nInputGates + m_nANDGates + m_nXORGates; i < numGates; i++) {
+		GATE* gate = &(m_vGates[i]);
+		assert(gate->type == G_OUT);
+		EvaluateOutputGate(gate);
+	}
+
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN || KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
 #if defined(KM11_PIPELINING) && KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
 	// pipelining is not implemented for DJN
 	setup->AddReceiveTask(m_nEncGGRcvPtr, 4 * m_nCiphertextSize);
 #endif
 
-	#pragma omp parallel for firstprivate(numGates)
-	for (uint32_t i = 0; i < numGates; i++) {
+	for(uint32_t i = 0; i < m_nInputGates; i++) {
 		GATE* gate = &(m_vGates[i]);
-		assert(gate->type == G_LIN || gate->type == G_NON_LIN || gate->type == G_IN || gate->type == G_OUT);
-		if(gate->type == G_IN) {
-			#pragma omp critical
-			{
-				EvaluateInputGate(i);
-			}
-		} else if (gate->type == G_OUT) {
-			#pragma omp critical
-			{
-				EvaluateOutputGate(gate);
-			}
-		} else if (gate->type == G_LIN || gate->type == G_NON_LIN) {
-			EvaluateKM11Gate(i, setup);
-		} else {
-			std::cout << "Gate type not supported by KM11" << std::endl;
-			exit(1);
-		}
+		assert(gate->type == G_IN);
+		EvaluateInputGate(i);
 	}
+
+	#pragma omp parallel firstprivate (setup, numGates)
+	{
+		BYTE* GTKeys = (BYTE*) malloc(m_nCiphertextSize * 8);
+		BYTE* tmpWirekeys = (BYTE*) malloc(m_nCiphertextSize * 2);
+
+		#pragma omp parallel for
+		for (uint32_t i = m_nInputGates; i < m_nInputGates + m_nANDGates + m_nXORGates; i++) {
+			GATE* gate = &(m_vGates[i]);
+			assert(gate->type == G_LIN || gate->type == G_NON_LIN);
+			EvaluateKM11Gate(i, setup, GTKeys, tmpWirekeys);
+		}
+
+		free(GTKeys);
+		free(tmpWirekeys);
+	}
+
+	for (uint32_t i = m_nInputGates; i < m_nInputGates + m_nANDGates + m_nXORGates; i++) {
+		GATE* gate = &(m_vGates[i]);
+		uint32_t idleft = gate->ingates.inputs.twin.left;
+		uint32_t idright = gate->ingates.inputs.twin.right;
+		UsedGate(idleft);
+		UsedGate(idright);
+		InstantiateGate(gate);
+	}
+
+	for(uint32_t i = m_nInputGates + m_nANDGates + m_nXORGates; i < numGates; i++) {
+		GATE* gate = &(m_vGates[i]);
+		assert(gate->type == G_OUT);
+		EvaluateOutputGate(gate);
+	}
+
 #endif
 #ifdef _OPENMP
 	m_nGarbledTableCtr += (m_nXORGates + m_nANDGates);
@@ -1226,9 +1249,6 @@ void YaoServerSharing::EvaluateKM11Gate(uint32_t gateid, ABYSetup* setup, BYTE* 
 		val1 = 0; val2 = 0; val3 = 1;
 	}
 
-
-//	printb("tmpWirekeys", tmpWirekeys, 2 * m_nWireKeyBytes);
-
 	// encrypt the 4 garbled table entries
 	sEnc(table + 0 * (GTEntrySize + m_nSymEncPaddingBytes), tmpWirekeys +    0 * GTEntrySize, GTEntrySize,
 			GTKeys + 0 * GTEntrySize, 2 * GTEntrySize);
@@ -1259,11 +1279,11 @@ void YaoServerSharing::EvaluateKM11Gate(uint32_t gateid, ABYSetup* setup, BYTE* 
 	}
 #endif
 
-	uint32_t idleft = gate->ingates.inputs.twin.left;
-	uint32_t idright = gate->ingates.inputs.twin.right;
-	UsedGate(idleft);
-	UsedGate(idright);
-	InstantiateGate(gate);
+	//uint32_t idleft = gate->ingates.inputs.twin.left;
+	//uint32_t idright = gate->ingates.inputs.twin.right;
+	//UsedGate(idleft);
+	//UsedGate(idright);
+	//InstantiateGate(gate);
 }
 #endif // KM11_GARBLING
 
@@ -1801,6 +1821,10 @@ void YaoServerSharing::GetDataToSend(std::vector<BYTE*>& sendbuf, std::vector<ui
 }
 
 void YaoServerSharing::FinishCircuitLayer() {
+#if defined(KM11_GARBLING) && KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
+	BYTE* tmpWirekey = (BYTE*) malloc(m_nWireKeyBytes);
+#endif
+
 	//Use OT bits from the client to determine the send bits that are supposed to go out next round
 	if (m_nClientInBitCtr > 0) {
 		for (uint32_t i = 0, linbitctr = 0; i < m_vClientInputGate.size() && linbitctr < m_nClientInBitCtr; i++) {
@@ -1844,20 +1868,20 @@ void YaoServerSharing::FinishCircuitLayer() {
 												 m_vROTMasks[1-clientROTbit].GetArr() + m_nClientInputKexIdx * m_nSecParamBytes, // mask resulting from OT
 												 m_bWireKeys + (2 * gateid + 1) * m_nSecParamBytes); // client input key representing "1"
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
-					m_vWireKeys[gateid]->export_to_bytes(m_bTmpWirekeys);
+					m_vWireKeys[gateid]->export_to_bytes(tmpWirekey);
 
 					assert(m_nCiphertextSize == 33);
 					m_pKeyOps->XOR33(m_vClientKeySndBuf[clientROTbit].GetArr() + linbitctr * m_nCiphertextSize,
 													 m_vROTMasks[clientROTbit].GetArr() + m_nClientInputKexIdx * m_nCiphertextSize, // mask resulting from OT
-													 m_bTmpWirekeys); // client input key representing "0"
+													 tmpWirekey); // client input key representing "0"
 
 					fe* s1 = m_cPKCrypto->get_fe();
 					s1->set_mul(m_vWireKeys[gateid], m_zR);
-					s1->export_to_bytes(m_bTmpWirekeys);
+					s1->export_to_bytes(tmpWirekey);
 
 					m_pKeyOps->XOR33(m_vClientKeySndBuf[1-clientROTbit].GetArr() + linbitctr * m_nCiphertextSize,
 													 m_vROTMasks[1-clientROTbit].GetArr() + m_nClientInputKexIdx * m_nCiphertextSize, // mask resulting from OT
-													 m_bTmpWirekeys); // client input key representing "1"
+													 tmpWirekey); // client input key representing "1"
 #endif
 #else
 					// no KM11 at all
@@ -1932,6 +1956,10 @@ void YaoServerSharing::FinishCircuitLayer() {
 			}
 		}
 	}
+
+#if defined(KM11_GARBLING) && KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
+	free(tmpWirekey);
+#endif
 
 	m_vClientInputGate.clear();
 	m_nClientInBitCtr = 0;
