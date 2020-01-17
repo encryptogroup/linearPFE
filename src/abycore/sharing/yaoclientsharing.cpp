@@ -563,15 +563,19 @@ void YaoClientSharing::CreateBlindingValues() {
 
 void YaoClientSharing::PrecomputeBlindingValues() {
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
-	seal::Encryptor bfvWirekeyEncryptor(m_nWirekeySEALcontext, m_nWirekeySEALpublicKey);
-	seal::Plaintext b_plain;
-	b_plain.resize(2048);
+	#pragma omp parallel
+	{
+		seal::Encryptor bfvWirekeyEncryptor(m_nWirekeySEALcontext, m_nWirekeySEALpublicKey);
+		seal::Plaintext b_plain;
+		b_plain.resize(2048);
 
-	for(int i = 0; i < (m_nXORGates + m_nANDGates); i+=8) {
-		m_vEncBlindingValues[i/8] = seal::Ciphertext();
+		#pragma omp for
+		for(int i = 0; i < (m_nXORGates + m_nANDGates); i+=8) {
+			m_vEncBlindingValues[i/8] = seal::Ciphertext();
 
-		encodeBufAsPlaintext(&b_plain, m_bBlindingValues + i * 2 * m_nWireKeyBytes, 2048);
-		bfvWirekeyEncryptor.encrypt(b_plain, m_vEncBlindingValues[i/8]);
+			encodeBufAsPlaintext(&b_plain, m_bBlindingValues + i * 2 * m_nWireKeyBytes, 2048);
+			bfvWirekeyEncryptor.encrypt(b_plain, m_vEncBlindingValues[i/8]);
+		}
 	}
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN
 #ifdef KM11_PRECOMPUTEB

@@ -1362,11 +1362,11 @@ void YaoServerSharing::EvaluateANDGate(GATE* gate, ABYSetup* setup) {
 /* create one encrypted keypair for each wire to be sent to the client who
 	 will then use them to create the encrypted garbled gates (encGG) */
 void YaoServerSharing::CreateEncryptedWireKeys(){
-	struct timespec start, mid, mid2, end;
+	struct timespec start, end;
 	uint64_t delta_a;
 	uint64_t delta;
 
-	//#pragma omp parallel
+	#pragma omp parallel
 	{
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
 	//seal::BatchEncoder bfvWirekeyEncoder(m_nWirekeySEALcontext);
@@ -1394,9 +1394,8 @@ void YaoServerSharing::CreateEncryptedWireKeys(){
 
 	size_t count;
 
-	//#pragma omp for private(count)
+	#pragma omp for
 	for (uint64_t i = 0; i < m_nNumberOfKeypairs; i++) {
-		//std::cout << "i " << i << '\n';
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
 		assert(m_nWireKeyBytes == 16);
 
@@ -1477,7 +1476,6 @@ void YaoServerSharing::CreateEncryptedWireKeys(){
 		djn_encrypt_fb(s1_encrypted, m_nDJNPubkey, s1);
 		//djn_encrypt_crt(s0_encrypted, m_nDJNPubkey, m_nDJNPrvkey, s0);
 		//djn_encrypt_crt(s1_encrypted, m_nDJNPubkey, m_nDJNPrvkey, s1);
-		clock_gettime(CLOCK_MONOTONIC_RAW, &mid2);
 
 		mpz_export(m_bEncWireKeys + (2 * i + 0) * m_nCiphertextSize, &count0, -1, m_nCiphertextSize, -1, 0, s0_encrypted);
 		mpz_export(m_bEncWireKeys + (2 * i + 1) * m_nCiphertextSize, &count1, -1, m_nCiphertextSize, -1, 0, s1_encrypted);
@@ -1497,8 +1495,6 @@ void YaoServerSharing::CreateEncryptedWireKeys(){
 		s0_enc->set_mul(tmpFE, m_vWireKeys[i]); // tmpFE = k * aP + M
 		s0_enc->export_to_bytes(m_bEncWireKeys + i * 2 * m_nCiphertextSize + m_nCiphertextSize);
 #endif // KM11_CRYPTOSYSTEM
-
-		clock_gettime(CLOCK_MONOTONIC_RAW, &mid);
 
 #ifdef DEBUGYAOSERVER
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN
