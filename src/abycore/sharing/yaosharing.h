@@ -201,6 +201,7 @@ protected:
 	const int m_nBFVpublicKeyLenExported = 65609;//32841;//8265;//65609;
 	//const int m_nBFVpublicKeyLenExported = 37200;//65609;//32841;//8265;//65609;
 	const uint64_t m_nBFVciphertextBufLen = 1024*8;//8265;//16457;
+	const uint64_t m_nBFVciphertextSymBufLen = 347*16;
 	const int m_nBFVgaloiskeysBufLen = 136376;
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN || KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
 	const int m_nSymEncPaddingBytes = 16;
@@ -267,9 +268,8 @@ protected:
 	}
 
 	void exportCiphertextToBuf(BYTE* buf, seal::Ciphertext* ciphertext) {
-		size_t ciphertextCount = 8192/2;//ciphertext->int_array().size();
-		//std::cout << "buflen: " << m_nBFVciphertextBufLen << ", ciphertextcount * 2: " << ciphertextCount * 2 << "\n";
-		assert(m_nBFVciphertextBufLen >= ciphertextCount * 2);
+		size_t ciphertextCount = ciphertext->int_array().size();
+		assert(m_nBFVciphertextBufLen == ciphertextCount * 2);
 
 		for (size_t i = 0; i < ciphertextCount; i++) {
 			uint16_t element = (*ciphertext)[i];
@@ -278,7 +278,7 @@ protected:
 	}
 
 	void importCiphertextFromBuf(seal::Ciphertext* ciphertext, BYTE* buf) {
-		size_t ciphertextCount = 8192/2;//ciphertext->int_array().size();
+		size_t ciphertextCount = ciphertext->int_array().size();
 		BYTE* ciphertextData = (BYTE*) ciphertext->data();
 		assert(ciphertext->size() != 0);
 		for (size_t i = 0; i < ciphertextCount; i++) {

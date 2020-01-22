@@ -56,6 +56,7 @@ YaoClientSharing::~YaoClientSharing() {
 		free(m_vTmpEncBuf);
 #ifdef KM11_GARBLING
 		free(m_bTmpGTEntry);
+		free(m_bEncGG);
 #endif
 		delete fMaskFct;
 }
@@ -97,7 +98,7 @@ void YaoClientSharing::PrepareSetupPhase(ABYSetup* setup) {
 #ifdef KM11_GARBLING
 	m_nNumberOfKeypairs = m_cBoolCircuit->GetNumInputGates() + m_nANDGates + m_nXORGates + m_nConstantGates;
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
-	m_bEncWireKeys = (BYTE*) malloc(m_nNumberOfKeypairs * m_nBFVciphertextBufLen);
+	m_bEncWireKeys = (BYTE*) malloc(m_nNumberOfKeypairs * m_nBFVciphertextSymBufLen);
 	m_bEncGG = (BYTE*) malloc((m_nXORGates + m_nANDGates) / 8 * m_nBFVciphertextBufLen);
 	m_bBlindingValues = (BYTE*) malloc((m_nANDGates + m_nXORGates) * 2 * m_nWireKeyBytes);
 	m_vEncBlindingValues.resize((m_nXORGates + m_nANDGates)/8);
@@ -265,16 +266,18 @@ void YaoClientSharing::PerformSetupPhase(ABYSetup* setup) {
 
 	clock_gettime(CLOCK_MONOTONIC_RAW, &start);
 	// receive encrypted wirepairs
-	std::cout << "AddReceiveTask(m_bEncWireKeys)" << std::endl;
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
-	setup->AddReceiveTask(m_bEncWireKeys, ((uint64_t)m_nNumberOfKeypairs) * m_nBFVciphertextBufLen);
+	std::cout << "AddReceiveTask(m_bEncWireKeys)" << std::endl;
+	setup->AddReceiveTask(m_bEncWireKeys, ((uint64_t)m_nNumberOfKeypairs) * m_nBFVciphertextSymBufLen);
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN
+	std::cout << "AddReceiveTask(m_bEncWireKeys)" << std::endl;
 #ifdef KM11_IMPROVED
 	setup->AddReceiveTask(m_bEncWireKeys, m_nNumberOfKeypairs * m_nCiphertextSize);
 #else
 	setup->AddReceiveTask(m_bEncWireKeys, m_nNumberOfKeypairs * 2 * m_nCiphertextSize);
 #endif
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
+	std::cout << "AddReceiveTask(m_bEncWireKeys, " << m_nNumberOfKeypairs * 2 * m_nCiphertextSize << ")" << std::endl;
 	setup->AddReceiveTask(m_bEncWireKeys, m_nNumberOfKeypairs * 2 * m_nCiphertextSize);
 #endif // KM11_CRYPTOSYSTEM
 	setup->WaitForTransmissionEnd();
@@ -350,13 +353,18 @@ void YaoClientSharing::ReceiveGarbledCircuitAndOutputShares(ABYSetup* setup) {
 #else
 	uint64_t gt_size = ((uint64_t) m_nANDGates) * KEYS_PER_GATE_IN_TABLE * m_nSecParamBytes;
 #endif
-	if (gt_size > 0)
+	if (gt_size > 0) {
+		std::cout << "AddReceiveTask(m_vGarbledCircuit, " << gt_size << ");" << std::endl;
 		setup->AddReceiveTask(m_vGarbledCircuit.GetArr(), gt_size);
-	if (m_nUNIVGates > 0)
+	}
+	if (m_nUNIVGates > 0) {
+		std::cout << "AddReceiveTask(m_vUniversalGateTable, " << ((uint64_t) m_nUNIVGates) * m_nSecParamBytes * KEYS_PER_UNIV_GATE_IN_TABLE << std::endl;
 		setup->AddReceiveTask(m_vUniversalGateTable.GetArr(), ((uint64_t) m_nUNIVGates) * m_nSecParamBytes * KEYS_PER_UNIV_GATE_IN_TABLE);
-	if (m_cBoolCircuit->GetNumOutputBitsForParty(CLIENT) > 0)
+	}
+	if (m_cBoolCircuit->GetNumOutputBitsForParty(CLIENT) > 0) {
+		std::cout << "AddReceiveTask(m_vOutputShareRcvBuf, " << ceil_divide(m_cBoolCircuit->GetNumOutputBitsForParty(CLIENT), 8) << ");" << std::endl;
 		setup->AddReceiveTask(m_vOutputShareRcvBuf.GetArr(), ceil_divide(m_cBoolCircuit->GetNumOutputBitsForParty(CLIENT), 8));
-
+	}
 }
 
 void YaoClientSharing::FinishSetupPhase(ABYSetup* setup) {
@@ -648,7 +656,9 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 	GATE *gate;
 	uint32_t idleft, idright;
 	uint32_t maxgateid = m_nANDGates + m_nXORGates + m_nInputGates;
+#if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN || KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
 	BYTE* encGGptr = m_bEncGG;
+#endif
 
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
 	#pragma omp parallel firstprivate(maxgateid) private(gate)
@@ -699,10 +709,13 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 
 		// import sj0_enc
 		if (gateid % 8 == 0) {
-			importCiphertextFromBuf(&encGG, m_bEncWireKeys + idleft * m_nBFVciphertextBufLen);
+			encGG.load(m_nWirekeySEALcontext, reinterpret_cast<std::byte*>(m_bEncWireKeys + idleft * m_nBFVciphertextSymBufLen), m_nBFVciphertextSymBufLen);
+			assert(!encGG.is_transparent());
 			shift_bits = 128;
 		} else {
-			importCiphertextFromBuf(&s_enc, m_bEncWireKeys + idleft * m_nBFVciphertextBufLen);
+			s_enc.load(m_nWirekeySEALcontext, reinterpret_cast<std::byte*>(m_bEncWireKeys + idleft * m_nBFVciphertextSymBufLen), m_nBFVciphertextSymBufLen);
+			assert(!s_enc.is_transparent());
+
 			// combine the two wire keys into one ciphertext for the encrypted garbled gate
 			// multiply by 2**shift_bits (equivalent to bit shift by shift_bits bit)
 			shift.resize(shift_bits + 1);
@@ -730,7 +743,7 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 #endif
 
 		// import sk0_enc
-		importCiphertextFromBuf(&s_enc, m_bEncWireKeys + idright * m_nBFVciphertextBufLen);
+		s_enc.load(m_nWirekeySEALcontext, reinterpret_cast<std::byte*>(m_bEncWireKeys + idright * m_nBFVciphertextSymBufLen), m_nBFVciphertextSymBufLen);
 		assert(!s_enc.is_transparent());
 
 		// combine the two wire keys into one ciphertext for the encrypted garbled gate

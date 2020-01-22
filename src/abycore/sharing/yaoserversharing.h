@@ -88,11 +88,11 @@ private:
 
 #ifdef KM11_GARBLING
 	uint64_t m_nNumberOfKeypairs; /**< the number of gates for which wire keys are generated (KM11 protocol) */
-	uint8_t* m_bEncWireKeys; /**< the encrypted wire keys sent to the client (KM11 protocol) */
 	uint8_t* m_bEncGG; /**< the encryted garbled gates receibed from the client (KM11 protocol) */
 
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN
 	uint8_t* m_bWireKeys; /**< the unencrypted wire keys created by the server */
+	uint8_t* m_bEncWireKeys; /**< the encrypted wire keys sent to the client (KM11 protocol) */
 	uint8_t* m_bPublickey; /**< the exported DJN/ECC public key */
 	djn_pubkey_t *m_nDJNPubkey; /**< the DJN public key */
 	djn_prvkey_t *m_nDJNPrvkey; /**< the DJN secret key */
@@ -100,6 +100,7 @@ private:
 	mpz_t m_zTmpWirekey; /**< temporary mpz value for a wire key */
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
 	uint8_t* m_bWireKeys; /**< the unencrypted wire keys created by the server (KM11 protocol) */
+	std::vector<std::byte> m_bEncWireKeys;
 	std::shared_ptr<seal::SEALContext> m_nWirekeySEALcontext;
 	seal::PublicKey m_nWirekeySEALpublicKey;
 	seal::SecretKey m_nWirekeySEALsecretKey;
@@ -107,6 +108,7 @@ private:
 	seal::Decryptor* m_nSEALdecryptor;
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
 	std::vector<fe*> m_vWireKeys; /**< the unencrypted wire keys created by the server (KM11 protocol) */
+	uint8_t* m_bEncWireKeys; /**< the encrypted wire keys sent to the client (KM11 protocol) */
 	uint8_t* m_bPublickey; /**< the exported DJN/ECC public key (KM11 protocol) */
 	fe* m_nECCPubkey; /**< EC ElGamal public key */
 	num* m_nECCPrvkey; /**< EC ElGamal private key */
