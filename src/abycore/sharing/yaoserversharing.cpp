@@ -239,8 +239,13 @@ void YaoServerSharing::PrepareSetupPhase(ABYSetup* setup) {
 #endif // KM11_GARBLING
 
 	m_vROTMasks.resize(2);
+#if defined(KM11_GARBLING) && KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
+	m_vROTMasks[0].Create((m_nClientInputBits + m_nConversionInputBits) * m_nCiphertextSize * 8);
+	m_vROTMasks[1].Create((m_nClientInputBits + m_nConversionInputBits) * m_nCiphertextSize * 8);
+#else
 	m_vROTMasks[0].Create((m_nClientInputBits + m_nConversionInputBits) * symbits);
 	m_vROTMasks[1].Create((m_nClientInputBits + m_nConversionInputBits) * symbits);
+#endif
 
 	CreateRandomWireKeys(m_vServerInputKeys, m_nServerInputBits + m_cBoolCircuit->GetNumA2YGates());
 	CreateRandomWireKeys(m_vClientInputKeys, m_nClientInputBits + m_nConversionInputBits);
@@ -259,8 +264,13 @@ void YaoServerSharing::PrepareSetupPhase(ABYSetup* setup) {
 	m_vServerKeySndBuf.Create((m_nServerInputBits + m_cBoolCircuit->GetNumA2YGates()) * symbits);
 
 	m_vClientKeySndBuf.resize(2);
+#if defined(KM11_GARBLING) && KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
+	m_vClientKeySndBuf[0].Create((m_nClientInputBits + m_nConversionInputBits) * m_nCiphertextSize * 8);
+	m_vClientKeySndBuf[1].Create((m_nClientInputBits + m_nConversionInputBits) * m_nCiphertextSize * 8);
+#else
 	m_vClientKeySndBuf[0].Create((m_nClientInputBits + m_nConversionInputBits) * symbits);
 	m_vClientKeySndBuf[1].Create((m_nClientInputBits + m_nConversionInputBits) * symbits);
+#endif
 
 	m_vOutputShareSndBuf.Create(m_cBoolCircuit->GetNumOutputBitsForParty(CLIENT));
 
@@ -1021,6 +1031,7 @@ void YaoServerSharing::EvaluateInputGate(uint32_t gateid) {
 			m_vPreSetInputGates.push_back(ingatevals);
 		}
 		InstantiateGate(gate);
+
 
 		memcpy(gate->gs.yinput.outKey, m_vServerInputKeys.GetArr() + m_nPermBitCtr * m_nSecParamBytes, m_nSecParamBytes * gate->nvals);
 		for (uint32_t i = 0; i < gate->nvals; i++) {
@@ -1798,7 +1809,7 @@ void YaoServerSharing::GetDataToSend(std::vector<BYTE*>& sendbuf, std::vector<ui
 
 void YaoServerSharing::FinishCircuitLayer() {
 #if defined(KM11_GARBLING) && KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
-	BYTE* tmpWirekey = (BYTE*) malloc(m_nWireKeyBytes);
+	BYTE* tmpWirekey = (BYTE*) malloc(m_nCiphertextSize);
 #endif
 
 	//Use OT bits from the client to determine the send bits that are supposed to go out next round
