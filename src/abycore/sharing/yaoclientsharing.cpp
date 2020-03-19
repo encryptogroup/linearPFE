@@ -55,8 +55,8 @@ YaoClientSharing::~YaoClientSharing() {
 		}
 		free(m_vTmpEncBuf);
 #ifdef KM11_GARBLING
-		free(m_bTmpGTEntry);
 		free(m_bEncGG);
+		free(m_bTmpGTKey);
 #endif
 		delete fMaskFct;
 }
@@ -83,9 +83,9 @@ void YaoClientSharing::PrepareSetupPhase(ABYSetup* setup) {
 
 #ifdef KM11_GARBLING
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN || KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
-	gt_size = ((uint64_t) m_nANDGates + m_nXORGates) * KEYS_PER_GATE_IN_TABLE * (m_nSecParamBytes + 2 * m_nSymEncPaddingBytes);
+	gt_size = ((uint64_t) m_nANDGates + m_nXORGates) * KEYS_PER_GATE_IN_TABLE * (m_nSecParamBytes + m_nPADDING_BYTES);
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
-	gt_size = ((uint64_t) m_nANDGates + m_nXORGates) * KEYS_PER_GATE_IN_TABLE * (m_nCiphertextSize + m_nSymEncPaddingBytes);
+	gt_size = ((uint64_t) m_nANDGates + m_nXORGates) * KEYS_PER_GATE_IN_TABLE * (m_nCiphertextSize + m_nPADDING_BYTES);
 #endif // KM11_CRYPTOSYSTEM
 #else // KM11_GARBLING
 	gt_size = ((uint64_t) m_nANDGates) * KEYS_PER_GATE_IN_TABLE * m_nSecParamBytes;
@@ -96,8 +96,10 @@ void YaoClientSharing::PrepareSetupPhase(ABYSetup* setup) {
 		return;
 
 #ifdef KM11_GARBLING
+	std::cout << "KM11_PFE with " << m_nANDGates + m_nXORGates + m_nConstantGates << " gates" << std::endl;
 	m_nNumberOfKeypairs = m_cBoolCircuit->GetNumInputGates() + m_nANDGates + m_nXORGates + m_nConstantGates;
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
+	std::cout << "KM11_CRYPTOSYSTEM: KM11_CRYPTOSYSTEM_BFV" << std::endl;
 	m_bEncWireKeys = (BYTE*) malloc(m_nNumberOfKeypairs * m_nBFVciphertextSymBufLen);
 	m_bEncGG = (BYTE*) malloc((m_nXORGates + m_nANDGates) / 8 * m_nBFVciphertextBufLen);
 	m_bBlindingValues = (BYTE*) malloc((m_nANDGates + m_nXORGates) * 2 * m_nWireKeyBytes);
@@ -106,13 +108,13 @@ void YaoClientSharing::PrepareSetupPhase(ABYSetup* setup) {
 	m_bOutputWireKeys = (BYTE*) malloc((m_nConstantGates + 2 * m_cBoolCircuit->GetNumOutputGates()) * m_nWireKeyBytes);
 	m_nOutputWireKeysCtr = 0;
 	m_bTmpGTKey = (BYTE*) malloc(m_nWireKeyBytes * 2);
-	m_bTmpGTEntry = (BYTE*) malloc(sizeof(BYTE) * (m_nSecParamBytes + m_nSymEncPaddingBytes));
-	assert(m_bTmpGTEntry != NULL);
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN
 #ifdef KM11_IMPROVED
+	std::cout << "KM11_CRYPTOSYSTEM: KM11_CRYPTOSYSTEM_DJN_IMPROVED" << std::endl;
 	m_bEncWireKeys = (BYTE*) malloc(m_nNumberOfKeypairs * m_nCiphertextSize);
 	m_bEncGG = (BYTE*) malloc((m_nXORGates + m_nANDGates) * 2 * m_nCiphertextSize);
 #else
+	std::cout << "KM11_CRYPTOSYSTEM: KM11_CRYPTOSYSTEM_DJN" << std::endl;
 	m_bEncWireKeys = (BYTE*) malloc(m_nNumberOfKeypairs * 2 * m_nCiphertextSize);
 	m_bEncGG = (BYTE*) malloc((m_nXORGates + m_nANDGates) * 4 * m_nCiphertextSize);
 #endif
@@ -120,20 +122,34 @@ void YaoClientSharing::PrepareSetupPhase(ABYSetup* setup) {
 	m_bOutputWireKeys = (BYTE*) malloc((m_nConstantGates + 2 * m_cBoolCircuit->GetNumOutputGates()) * m_nWireKeyBytes);
 	m_nOutputWireKeysCtr = 0;
 	m_bTmpGTKey = (BYTE*) malloc(m_nWireKeyBytes * 2);
-	m_bTmpGTEntry = (BYTE*) malloc(sizeof(BYTE) * (m_nSecParamBytes + m_nSymEncPaddingBytes));
-	assert(m_bTmpGTEntry != NULL);
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
+	std::cout << "KM11_CRYPTOSYSTEM: KM11_CRYPTOSYSTEM_ECC" << std::endl;
 	m_bEncWireKeys = (BYTE*) malloc(m_nNumberOfKeypairs * 2 * m_nCiphertextSize);
 	m_bEncGG = (BYTE*) malloc((m_nXORGates + m_nANDGates) * 4 * m_nCiphertextSize);
 	m_vBlindingValues.resize(m_cBoolCircuit->GetNumGates() * 2);
 	m_vEncBlindingValues.resize((m_nXORGates + m_nANDGates) * 4);
 	m_bTmpGTKey = (BYTE*) malloc(m_nCiphertextSize * 2);
-	m_bTmpGTEntry = (BYTE*) malloc(m_nCiphertextSize + m_nSymEncPaddingBytes);
 	// plaintext wire key pairs of (constant and) output gates to determine circuit output
 	m_bOutputWireKeys = (BYTE*) malloc((m_nConstantGates + 2 * m_cBoolCircuit->GetNumOutputGates()) * m_nCiphertextSize);
 	m_nOutputWireKeysCtr = 0;
-	assert(m_bTmpGTEntry != NULL);
 #endif // KM11_CRYPTOSYSTEM
+
+#ifdef KM11_PRECOMPUTEB
+	std::cout << "KM11_PRECOMPUTEB: 1" << std::endl;
+#else
+	std::cout << "KM11_PRECOMPUTEB: 0" << std::endl;
+#endif
+#ifdef KM11_PIPELINING
+	std::cout << "KM11_PIPELINING: 1" << std::endl;
+#else
+	std::cout << "KM11_PIPELINING: 0" << std::endl;
+#endif
+#ifdef _OPENMP
+	std::cout << "OPENMP: 1" << std::endl;
+#else
+	std::cout << "OPENMP: 0" << std::endl;
+#endif
+	std::cout << std::endl << std::endl;
 #endif
 
 	//TODO figure out which parts of the init can be moved to prepareonlinephase
@@ -214,14 +230,14 @@ void YaoClientSharing::PerformSetupPhase(ABYSetup* setup) {
 	CreateBlindingValues();
 	clock_gettime(CLOCK_MONOTONIC_RAW, &end);
 	delta = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_nsec - start.tv_nsec) / 1000;
-	std::cout << "[time] Creation of blinding values took " << delta << " microseconds.\n" << std::endl;
+	std::cout << "[TIME] TIME_CREATE_BLINDING_VALUES: " << delta << " microseconds" << std::endl;
 #endif // KM11_GARBLING
 
 #ifdef KM11_GARBLING
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
 	// receive BFV public key
 	std::byte BFVpublickeyBuf[m_nBFVpublicKeyLenExported];
-	std::cout << "setup->AddReceiveTask(BFVpublickeyBuf, " << m_nBFVpublicKeyLenExported << ");" << '\n';
+	std::cout << "setup->AddReceiveTask(BFVpublickeyBuf, " << m_nBFVpublicKeyLenExported << ");" << std::endl;
 	setup->AddReceiveTask(reinterpret_cast<BYTE*>(&BFVpublickeyBuf), m_nBFVpublicKeyLenExported);
 	setup->WaitForTransmissionEnd();
 
@@ -262,12 +278,11 @@ void YaoClientSharing::PerformSetupPhase(ABYSetup* setup) {
 	PrecomputeBlindingValues();
 	clock_gettime(CLOCK_MONOTONIC_RAW, &end);
 	delta = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_nsec - start.tv_nsec) / 1000;
-	std::cout << "[timePrecomB] Precomputation of parameter b took " << delta << " microseconds.\n" << std::endl;
+	std::cout << "[TIME] TIME_PRECOMPUTE_B: " << delta << " microseconds" << std::endl;
 
 	clock_gettime(CLOCK_MONOTONIC_RAW, &start);
 	// receive encrypted wirepairs
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
-	std::cout << "AddReceiveTask(m_bEncWireKeys)" << std::endl;
 	setup->AddReceiveTask(m_bEncWireKeys, ((uint64_t)m_nNumberOfKeypairs) * m_nBFVciphertextSymBufLen);
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN
 	std::cout << "AddReceiveTask(m_bEncWireKeys)" << std::endl;
@@ -283,32 +298,32 @@ void YaoClientSharing::PerformSetupPhase(ABYSetup* setup) {
 	setup->WaitForTransmissionEnd();
 	clock_gettime(CLOCK_MONOTONIC_RAW, &end);
 	delta = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_nsec - start.tv_nsec) / 1000;
-	std::cout << "[timeEncWK] receiving the encrypted wirekeys took " << delta << " microseconds.\n" << std::endl;
+	std::cout << "[TIME] TIME_WAIT_FOR_ENCWK: " << delta << " microseconds" << std::endl;
 
 	clock_gettime(CLOCK_MONOTONIC_RAW, &start);
 	CreateEncGarbledGates(setup);
 	clock_gettime(CLOCK_MONOTONIC_RAW, &end);
 	delta = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_nsec - start.tv_nsec) / 1000;
-	std::cout << "[timeEncGG] creating the the encrypted garbled gates took _____ " << delta << " _____ microseconds.\n" << std::endl;
+	std::cout << "[TIME] TIME_CREATE_ENCGG: " << delta << " microseconds" << std::endl;
 
 	// send encrypted garbled gates
 	clock_gettime(CLOCK_MONOTONIC_RAW, &start);
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
 #ifndef KM11_PIPELINING
-	std::cout << "AddSendTask(m_bEncGG, " << (m_nANDGates + m_nXORGates) / 8 * m_nBFVciphertextBufLen << ");" << std::endl;
+	std::cout << "[SEND] m_bEncGG: " << (m_nANDGates + m_nXORGates) / 8 * m_nBFVciphertextBufLen << std::endl;
 	setup->AddSendTask(m_bEncGG, (m_nANDGates + m_nXORGates) / 8 * m_nBFVciphertextBufLen);
 #endif
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN
 #ifdef KM11_IMPROVED
-	std::cout << "AddSendTask(m_bEncGG, " << (m_nXORGates + m_nANDGates) * 2 * m_nCiphertextSize << ");" << std::endl;
+	std::cout << "[SEND] m_bEncGG: " << (m_nXORGates + m_nANDGates) * 2 * m_nCiphertextSize << std::endl;
 	setup->AddSendTask(m_bEncGG, (m_nXORGates + m_nANDGates) * 2 * m_nCiphertextSize);
 #else // KM11_IMPROVED
-	std::cout << "AddSendTask(m_bEncGG, " << (m_nXORGates + m_nANDGates) * 4 * m_nCiphertextSize << ");" << std::endl;
+	std::cout << "[SEND] m_bEncGG " << (m_nXORGates + m_nANDGates) * 4 * m_nCiphertextSize << std::endl;
 	setup->AddSendTask(m_bEncGG, (m_nXORGates + m_nANDGates) * 4 * m_nCiphertextSize);
 #endif // KM11_IMPROVED
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
 #ifndef KM11_PIPELINING
-	std::cout << "AddSendTask(m_bEncGG, " << (m_nXORGates + m_nANDGates) * 4 * m_nCiphertextSize << ");" << std::endl;
+	std::cout << "[SEND] m_bEncGG: " << (m_nXORGates + m_nANDGates) * 4 * m_nCiphertextSize << std::endl;
 	setup->AddSendTask(m_bEncGG, (m_nXORGates + m_nANDGates) * 4 * m_nCiphertextSize);
 #endif
 #endif // KM11_CRYPTOSYSTEM
@@ -333,10 +348,13 @@ void YaoClientSharing::PerformSetupPhase(ABYSetup* setup) {
 	setup->WaitForTransmissionEnd();
 	clock_gettime(CLOCK_MONOTONIC_RAW, &end);
 	delta = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_nsec - start.tv_nsec) / 1000;
-	std::cout << "[Time] sending the encGG & receiving the keys for the output gates took " << delta << " microseconds." << std::endl;
+	std::cout << "[TIME] TIME_SEND_ENCGG_WAIT_FOR_OUTPUT_KEYS: " << delta << " microseconds" << std::endl;
 #endif // #ifdef KM11_GARBLING
 
 	ReceiveGarbledCircuitAndOutputShares(setup);
+	clock_gettime(CLOCK_MONOTONIC_RAW, &end);
+	delta = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_nsec - start.tv_nsec) / 1000;
+	std::cout << "[TIME] TIME_SEND_ENCGG_WAIT_FOR_GC: " << delta << " microseconds" << std::endl;
 }
 
 void YaoClientSharing::PrepareOnlinePhase() {
@@ -346,9 +364,9 @@ void YaoClientSharing::PrepareOnlinePhase() {
 void YaoClientSharing::ReceiveGarbledCircuitAndOutputShares(ABYSetup* setup) {
 #ifdef KM11_GARBLING
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN || KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
-	uint64_t gt_size = ((uint64_t) m_nANDGates + m_nXORGates) * KEYS_PER_GATE_IN_TABLE * (m_nSecParamBytes + 2 * m_nSymEncPaddingBytes);
+	uint64_t gt_size = ((uint64_t) m_nANDGates + m_nXORGates) * KEYS_PER_GATE_IN_TABLE * (m_nSecParamBytes + m_nPADDING_BYTES);
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
-	uint64_t gt_size = ((uint64_t) m_nANDGates + m_nXORGates) * KEYS_PER_GATE_IN_TABLE * (m_nCiphertextSize + m_nSymEncPaddingBytes);
+	uint64_t gt_size = ((uint64_t) m_nANDGates + m_nXORGates) * KEYS_PER_GATE_IN_TABLE * (m_nCiphertextSize + m_nPADDING_BYTES);
 #endif
 #else
 	uint64_t gt_size = ((uint64_t) m_nANDGates) * KEYS_PER_GATE_IN_TABLE * m_nSecParamBytes;
@@ -683,7 +701,7 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 #ifdef DEBUGYAOCLIENT
 		clock_gettime(CLOCK_MONOTONIC_RAW, &end);
 		delta = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_nsec - start.tv_nsec) / 1000;
-		std::cout << "[time] initialisations: " << delta << " microseconds." << std::endl;
+		std::cout << "[TIME] initializations: " << delta << " microseconds." << std::endl;
 #endif
 
 	assert((m_nANDGates + m_nXORGates) % 8 == 0);
@@ -731,14 +749,14 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 #ifdef DEBUGYAOCLIENT
 		clock_gettime(CLOCK_MONOTONIC_RAW, &end);
 		delta = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_nsec - start.tv_nsec) / 1000;
-		std::cout << "[time] 2x import " << delta << " microseconds." << std::endl;
+		std::cout << "[TIME] 2x import " << delta << " microseconds." << std::endl;
 		clock_gettime(CLOCK_MONOTONIC_RAW, &start);
 #endif
 
 #ifdef DEBUGYAOCLIENT
 		clock_gettime(CLOCK_MONOTONIC_RAW, &end);
 		delta = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_nsec - start.tv_nsec) / 1000;
-		std::cout << "[time] 1x multiply_plain_inplace " << delta << " microseconds." << std::endl;
+		std::cout << "[TIME] 1x multiply_plain_inplace " << delta << " microseconds." << std::endl;
 		clock_gettime(CLOCK_MONOTONIC_RAW, &start);
 #endif
 
@@ -760,7 +778,7 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 #ifdef DEBUGYAOCLIENT
 		clock_gettime(CLOCK_MONOTONIC_RAW, &end);
 		delta = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_nsec - start.tv_nsec) / 1000;
-		std::cout << "[time] 2x add_inplace " << delta << " microseconds." << std::endl;
+		std::cout << "[TIME] 2x add_inplace " << delta << " microseconds." << std::endl;
 		clock_gettime(CLOCK_MONOTONIC_RAW, &start);
 #endif
 
@@ -777,7 +795,7 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 #ifdef DEBUGYAOCLIENT
 			clock_gettime(CLOCK_MONOTONIC_RAW, &end);
 			delta = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_nsec - start.tv_nsec) / 1000;
-			std::cout << "[time] 1x add_plain_inplace (blinding values): " << delta << " microseconds." << std::endl;
+			std::cout << "[TIME] 1x add_plain_inplace (blinding values): " << delta << " microseconds." << std::endl;
 			clock_gettime(CLOCK_MONOTONIC_RAW, &start);
 #endif
 
@@ -792,7 +810,7 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 #ifdef DEBUGYAOCLIENT
 		clock_gettime(CLOCK_MONOTONIC_RAW, &end);
 		delta = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_nsec - start.tv_nsec) / 1000;
-		std::cout << "[time] 2x export " << delta << " microseconds." << std::endl;
+		std::cout << "[TIME] 2x export " << delta << " microseconds." << std::endl;
 #endif
 	}
 	}
@@ -979,9 +997,9 @@ void YaoClientSharing::EvaluateKM11Gate(uint32_t gateid) {
 	uint8_t* rkey = gright->gs.yval;
 	uint8_t* outKey = gate->gs.yval;
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN || KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
-	uint8_t* table = m_vGarbledCircuit.GetArr() + (m_nSecParamBytes + m_nSymEncPaddingBytes) * KEYS_PER_GATE_IN_TABLE * m_nGarbledTableCtr;
+	uint8_t* table = m_vGarbledCircuit.GetArr() + (m_nSecParamBytes + m_nPADDING_BYTES) * KEYS_PER_GATE_IN_TABLE * m_nGarbledTableCtr;
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
-	uint8_t* table = m_vGarbledCircuit.GetArr() + (m_nCiphertextSize + m_nSymEncPaddingBytes) * KEYS_PER_GATE_IN_TABLE * m_nGarbledTableCtr;
+	uint8_t* table = m_vGarbledCircuit.GetArr() + (m_nCiphertextSize + m_nPADDING_BYTES) * KEYS_PER_GATE_IN_TABLE * m_nGarbledTableCtr;
 #endif
 
 	assert(lkey != NULL);
@@ -1062,25 +1080,16 @@ void YaoClientSharing::EvaluateKM11Gate(uint32_t gateid) {
 	sk->export_to_bytes(m_bTmpGTKey + m_nCiphertextSize);
 #endif // KM11_CRYPTOSYSTEM
 
-	bool valid;
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN || KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
 	uint32_t const GTEntrySize = m_nWireKeyBytes;
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
 	uint32_t const GTEntrySize = m_nCiphertextSize;
 #endif
-	for(int i = 0; i < 4; i++) {
-		valid = sDec(m_bTmpGTEntry, table + i * (GTEntrySize + m_nSymEncPaddingBytes), GTEntrySize + m_nSymEncPaddingBytes, m_bTmpGTKey, 2 * GTEntrySize);
 
-		// check if m_bTmpGTEntry is a valid decryption
-		if(valid == 1) {
-			memcpy(outKey, m_bTmpGTEntry, GTEntrySize);
-			break;
-		}
-
-		if (i == 3) {
-			std::cout << "Could not decrypt garbled table for gate " << gateid << '\n';
-			exit(1);
-		}
+	bool valid = sDec(outKey, GTEntrySize, table, m_bTmpGTKey, 2 * GTEntrySize, gateid);
+	if (!valid) {
+		std::cout << "Could not decrypt garbled table for gate " << gateid << '\n';
+		exit(1);
 	}
 
 	m_nGarbledTableCtr++;

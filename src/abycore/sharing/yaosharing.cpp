@@ -66,13 +66,16 @@ YaoSharing::~YaoSharing() {
 #define AES_BLOCK_SIZE 32
 
 // symmectric encrytion function (AES encrytion using key as the seed for the AES key)
-void YaoSharing::sEnc(BYTE* c, BYTE* p, uint32_t p_len, BYTE* key, uint32_t key_len)
+void YaoSharing::sEnc(BYTE* c, BYTE* p, uint32_t p_len, BYTE* key, uint32_t key_len, uint32_t gateid)
 {
-	//std::cout << "sEnc(p_len = "<<p_len<<")" << '\n';
 	int nrounds = 5; // rounds of key material hashing
 	unsigned char evp_key[32], evp_iv[32];
 
-	int i = EVP_BytesToKey(EVP_aes_128_cbc(), EVP_sha256(), NULL, key, key_len, nrounds, evp_key, evp_iv);
+	BYTE bytesToKey[key_len + 4];
+	memcpy(bytesToKey, key, key_len);
+	memcpy(bytesToKey + key_len, reinterpret_cast<BYTE*>(&gateid), 4);
+
+	int i = EVP_BytesToKey(EVP_aes_128_cbc(), EVP_sha256(), NULL, bytesToKey, key_len + 4, nrounds, evp_key, evp_iv);
 	assert(i == 16); // key size should be 128 bits (16 bytes)
 
 	EVP_CIPHER_CTX* enc_ctx;
@@ -80,43 +83,88 @@ void YaoSharing::sEnc(BYTE* c, BYTE* p, uint32_t p_len, BYTE* key, uint32_t key_
 	EVP_CIPHER_CTX_init(enc_ctx);
 	EVP_EncryptInit_ex(enc_ctx, EVP_aes_128_cbc(), NULL, evp_key, evp_iv);
 
-	//std::cout << "p_len: " << p_len << ", m_nSymEncPad: " << m_nSymEncPaddingBytes << std::endl;
-	assert((p_len + m_nSymEncPaddingBytes) % 16 == 0); // EVP_EncryptUpdate only encrypts blocks of 16 Byte
-	BYTE* tmpSymEncBuf = (BYTE*) malloc(p_len + m_nSymEncPaddingBytes);
-	memcpy(tmpSymEncBuf, p, p_len);
-	memset(tmpSymEncBuf + p_len, 0, m_nSymEncPaddingBytes);
-	int c_len;
-	EVP_EncryptUpdate(enc_ctx, c, &c_len, tmpSymEncBuf, p_len + m_nSymEncPaddingBytes);
+	// encrypt counter to get (p_len bytes + 40 bits) of encrypted data (will later be XORed with plaintext)
+	uint32_t num_AES_blocks = (p_len + AES_BYTES - 1) / AES_BYTES; // ceil(plen/AES_BYTES)
+	BYTE tmpCipherBlock[16];
+	BYTE block_cipher[num_AES_blocks * AES_BYTES];
 
-	//std::cout << "p_len: " << p_len << ", c_len: " << c_len << ", m_nSymEncPad" << m_nSymEncPaddingBytes << std::endl;
-	assert(c_len == p_len + m_nSymEncPaddingBytes);
+	int block_cipher_len;
+	for(uint32_t counter = 0; counter < num_AES_blocks; counter++) {
+		memset(&tmpCipherBlock, counter, AES_BYTES);
+		EVP_EncryptUpdate(enc_ctx, block_cipher + counter * AES_BYTES, &block_cipher_len, tmpCipherBlock, AES_BYTES);
+	}
 	EVP_CIPHER_CTX_free(enc_ctx);
-	free(tmpSymEncBuf);
+
+	// ----- ----- -----
+
+	if (p_len == 16 + m_nPADDING_BYTES) {
+		// XOR (16 + PADDING_BYTES) BYTES
+		((uint64_t*) c)[0] = ((uint64_t*) block_cipher)[0] ^ ((uint64_t*) p)[0]; //  0- 7
+		((uint64_t*) c)[1] = ((uint64_t*) block_cipher)[1] ^ ((uint64_t*) p)[1]; //  8-15
+		((uint32_t*) c)[4] = ((uint32_t*) block_cipher)[4] ^ ((uint32_t*) p)[4]; // 16-19
+		((uint8_t*) c)[20] = ((uint8_t*) block_cipher)[20] ^ ((uint8_t*) p)[20]; // 20-20
+	} else if (p_len == 33 + m_nPADDING_BYTES) {
+		// XOR (33 + PADDING_BYTES) BYTES
+		((uint64_t*) (c))[0]  = ((uint64_t*) block_cipher)[0]  ^ ((uint64_t*) p)[0]; //  0- 7
+		((uint64_t*) (c))[1]  = ((uint64_t*) block_cipher)[1]  ^ ((uint64_t*) p)[1]; //  8-15
+		((uint64_t*) (c))[2]  = ((uint64_t*) block_cipher)[2]  ^ ((uint64_t*) p)[2]; // 16-23
+		((uint64_t*) (c))[3]  = ((uint64_t*) block_cipher)[3]  ^ ((uint64_t*) p)[3]; // 24-31
+		((uint32_t*) (c))[8]  = ((uint32_t*) block_cipher)[8]  ^ ((uint32_t*) p)[8]; // 32-35
+		((uint16_t*) (c))[18] = ((uint16_t*) block_cipher)[18] ^ ((uint16_t*) p)[18]; // 36-37
+	} else {
+		std::cerr << "sEnc not implemented for p_len (= " << p_len << ") not in {16,33}!" << std::endl;
+		std::exit(1);
+	}
 }
 
-bool YaoSharing::sDec(BYTE* p, BYTE* c, uint32_t c_len, BYTE* key, uint32_t key_len)
+bool YaoSharing::sDec(BYTE* p, uint32_t p_len, BYTE* table, BYTE* key, uint32_t key_len, uint32_t gateid)
 {
-	//std::cout << "sDec(c_len = "<<c_len<<")" << '\n';
-
 	int nrounds = 5; // rounds of key material hashing
 	unsigned char evp_key[32], evp_iv[32];
 
-	int i = EVP_BytesToKey(EVP_aes_128_cbc(), EVP_sha256(), NULL, key, key_len, nrounds, evp_key, evp_iv);
-	assert(i == 16); // key size should be 128 bits (16 bytes)
+	BYTE bytesToKey[key_len + 4];
+	memcpy(bytesToKey, key, key_len);
+	memcpy(bytesToKey + key_len, reinterpret_cast<BYTE*>(&gateid), 4);
 
-	EVP_CIPHER_CTX* dec_ctx;
-	dec_ctx = EVP_CIPHER_CTX_new();
-	EVP_CIPHER_CTX_init(dec_ctx);
-	EVP_DecryptInit_ex(dec_ctx, EVP_aes_128_cbc(), NULL, evp_key, evp_iv);
+	EVP_BytesToKey(EVP_aes_128_cbc(), EVP_sha256(), NULL, bytesToKey, key_len + 4, nrounds, evp_key, evp_iv);
 
-	int p_len;
-	EVP_DecryptUpdate(dec_ctx, p, &p_len, c, c_len);
-	//std::cout << "c_len: " << c_len << ", p_len: " << p_len << ", m_nSymEncPaddingBytes: " << m_nSymEncPaddingBytes << '\n';
+	EVP_CIPHER_CTX* enc_ctx;
+	enc_ctx = EVP_CIPHER_CTX_new();
+	EVP_CIPHER_CTX_init(enc_ctx);
+	EVP_EncryptInit_ex(enc_ctx, EVP_aes_128_cbc(), NULL, evp_key, evp_iv);
 
-	//assert(p_len == c_len - m_nSymEncPaddingBytes);
-	EVP_CIPHER_CTX_free(dec_ctx);
+	// encrypt counter to get (p_len bytes + 40 bits) of encrypted data (will later be XORed with plaintext)
+	uint32_t num_AES_blocks = (p_len + m_nPADDING_BYTES + AES_BYTES - 1) / AES_BYTES; // ceil(plen/AES_BYTES)
+	BYTE tmpCipherBlock[16];
+	BYTE block_cipher[num_AES_blocks * AES_BYTES];
 
-	return (memcmp(p + c_len - m_nSymEncPaddingBytes, zerobuffer, m_nSymEncPaddingBytes) == 0);
+	int block_cipher_len;
+	for(uint32_t counter = 0; counter < num_AES_blocks; counter++) {
+		memset(&tmpCipherBlock, counter, AES_BYTES);
+		EVP_EncryptUpdate(enc_ctx, block_cipher + counter * AES_BYTES, &block_cipher_len, tmpCipherBlock, AES_BYTES);
+	}
+	EVP_CIPHER_CTX_free(enc_ctx);
+
+	// ----- ----- -----
+
+	BOOL valid;
+	for(int i = 0; i < 4; i++) {
+		valid = memcmp(table + i * (p_len + m_nPADDING_BYTES) + p_len, block_cipher + p_len, 5) == 0;
+		if (valid) {
+			if (p_len == 16) {
+				m_pKeyOps->XOR(p, block_cipher, table + i * (p_len + m_nPADDING_BYTES));
+			} else if (p_len == 33) {
+				m_pKeyOps->XOR33(p, block_cipher, table + i * (p_len + m_nPADDING_BYTES));
+			} else {
+				std::cerr << "sDec not implemented for p_len (= " << p_len << ") not in {16,33}!" << std::endl;
+				std::exit(1);
+			}
+			break;
+		} else if (i == 3) {
+			return 0;
+		}
+	}
+	return 1;
 }
 
 BOOL YaoSharing::EncryptWire(BYTE* c, BYTE* p, uint32_t id)

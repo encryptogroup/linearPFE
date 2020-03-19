@@ -103,7 +103,6 @@ private:
 	std::vector<fe*> m_vBlindingValues; /**< vector containing the blinding values */
 	std::vector<fe*> m_vEncBlindingValues; /**< the encrypted blinding values (two fe* elements per blinding value) */
 #endif
-	uint8_t* m_bTmpGTEntry; /**< buffer used while decrypting the garbled tables */
 	uint8_t* m_bTmpGTKey; /**< buffer used while decrypting the garbled tables */
 #endif
 

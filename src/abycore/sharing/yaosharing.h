@@ -50,7 +50,7 @@ typedef struct {
 #define KM11_CRYPTOSYSTEM_DJN 1
 #define KM11_CRYPTOSYSTEM_BFV 2
 #define KM11_CRYPTOSYSTEM_ECC 3
-#define KM11_CRYPTOSYSTEM KM11_CRYPTOSYSTEM_BFV
+#define KM11_CRYPTOSYSTEM KM11_CRYPTOSYSTEM_DJN
 
 // enable improved variant of KM11
 // (see section 3.2 "A More Efficient Variant" in KM11 paper)
@@ -203,11 +203,7 @@ protected:
 	const uint64_t m_nBFVciphertextBufLen = 1024*8;//8265;//16457;
 	const uint64_t m_nBFVciphertextSymBufLen = 347*16;
 	const int m_nBFVgaloiskeysBufLen = 136376;
-#if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN || KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
-	const int m_nSymEncPaddingBytes = 16;
-#elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
-	const int m_nSymEncPaddingBytes = 15; // ECC ciphertexts are 33 Byte, pad to next AES block
-#endif
+	const int m_nPADDING_BYTES = 5;
 
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
 	pk_crypto* m_cPKCrypto;
@@ -294,16 +290,17 @@ protected:
 	 \param  key	the seed for the AES key (will be hashed by sEnc)
 	 \param  bytes	the length of p, c and key in bytes
 	 */
-	void sEnc(BYTE* c, BYTE* p, uint32_t p_len, BYTE* key, uint32_t key_len);
+	void sEnc(BYTE* c, BYTE* p, uint32_t p_len, BYTE* key, uint32_t key_len, uint32_t gateid);
 
 	/**
 	 symmectric decrytion function (AES using key as the seed for the AES key)
 	 \param  p 			the plaintext
-	 \param  c 			the ciphertext
+	 \param  p_len		the plaintext length
+	 \param  table		the garbled table
 	 \param  key		the seed for the AES key (will be hashed by sEnc)
 	 \param  bytes	the length of p, c and key in bytes
 	 */
-	bool sDec(BYTE* p, BYTE* c, uint32_t c_len, BYTE* key, uint32_t key_len);
+	bool sDec(BYTE* p, uint32_t p_len, BYTE* table, BYTE* key, uint32_t key_len, uint32_t gateid);
 
 	const BYTE zerobuffer[16]{0};
 
