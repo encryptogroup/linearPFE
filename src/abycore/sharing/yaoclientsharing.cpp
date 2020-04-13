@@ -526,16 +526,22 @@ void YaoClientSharing::EvaluateInteractiveOperations(uint32_t depth) {
 #ifdef KM11_GARBLING
 void YaoClientSharing::CreateBlindingValues() {
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_BFV
+	#pragma omp parallel
+	{
 	size_t count0;
 	mpz_t b;
 	mpz_init(b);
+	#pragma omp for
 	for(int i = 0; i < (m_nANDGates + m_nXORGates); i++) {
 		aby_prng(b, 2 * m_nWireKeyBytes * 8);
 		mpz_export(m_bBlindingValues + i * 2 * m_nWireKeyBytes, &count0, -1, 2 * m_nWireKeyBytes, -1, 0, b);
 		assert(count0 == 1);
 	}
 	mpz_clear(b);
+	}
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN
+	#pragma omp parallel
+	{
 #ifndef KM11_IMPROVED
 	mpz_t a1, a2;
 	mpz_inits(a1, a2, NULL);
@@ -543,6 +549,7 @@ void YaoClientSharing::CreateBlindingValues() {
 	mpz_t b1, b2;
 	mpz_inits(b1, b2, NULL);
 	size_t count0, count1;
+	#pragma omp for
 	for(int i = 0; i < m_cBoolCircuit->GetNumGates(); i++) {
 		GATE* gate = &(m_vGates[i]);
 		aby_prng(b1, m_nWireKeyBytes * 8);
@@ -566,6 +573,7 @@ void YaoClientSharing::CreateBlindingValues() {
 	mpz_clears(a1, a2, NULL);
 #endif
 	mpz_clears(b1, b2, NULL);
+	}
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
 	#pragma omp parallel
 	{
@@ -605,10 +613,13 @@ void YaoClientSharing::PrecomputeBlindingValues() {
 	}
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN
 #ifdef KM11_PRECOMPUTEB
+	#pragma omp parallel
+	{
 	mpz_t b1, b2;
 	mpz_inits(b1, b2, NULL);
 	GATE* gate;
 
+	#pragma omp for
 	for(int i = 0; i < m_cBoolCircuit->GetNumGates(); i++) {
 		gate = &(m_vGates[i]);
 		mpz_import(b1, 1, -1, m_nWireKeyBytes, -1, 0, gate->gs.yinput.b1);
@@ -627,6 +638,7 @@ void YaoClientSharing::PrecomputeBlindingValues() {
 		assert(count1 == 1 && count2 == 1);
 	}
 	mpz_clears(b1, b2, NULL);
+	}
 
 #endif // KM11_PRECOMPUTEB
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
