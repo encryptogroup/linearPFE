@@ -815,6 +815,8 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 	}
 	}
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN
+	#pragma omp parallel firstprivate(maxgateid) private(gate)
+	{
 #ifdef KM11_IMPROVED
 		mpz_t sj0_enc, sk0_enc; // the encrypted wirekeypairs
 		mpz_inits(sj0_enc, sk0_enc, NULL);
@@ -836,6 +838,7 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 		mpz_inits(bj, bk, NULL);
 #endif
 
+	#pragma omp for private(idleft, idright, encGGptr)
 	for (size_t gateid = m_nInputGates; gateid < maxgateid; gateid++) {
 		gate = &(m_vGates[gateid]);
 		idleft = gate->ingates.inputs.twin.left;
@@ -891,10 +894,10 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 		mpz_mod(encGG_k0, encGG_k0, m_nDJNPubkey->n_squared);
 
 		size_t count0, count2;
+		encGGptr = m_bEncGG + (gateid - m_nInputGates) * 2 * m_nCiphertextSize;
 		mpz_export(encGGptr + 0 * m_nCiphertextSize, &count0, -1, m_nCiphertextSize, -1, 0, encGG_j0);
 		mpz_export(encGGptr + 1 * m_nCiphertextSize, &count2, -1, m_nCiphertextSize, -1, 0, encGG_k0);
 		assert(count0 == 1 && count2 == 1);
-		encGGptr += 2 * m_nCiphertextSize;
 #else
 		// homomorphic multiplication: Dec(Enc(s) ^ a) == s * a
 		mpz_powm(aj_times_sj0_enc, sj0_enc, aj, m_nDJNPubkey->n_squared);
@@ -913,12 +916,12 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 		mpz_mod(encGG_k1, encGG_k1, m_nDJNPubkey->n_squared);
 
 		size_t count0, count1, count2, count3;
+		encGGptr = m_bEncGG + (gateid - m_nInputGates) * 4 * m_nCiphertextSize;
 		mpz_export(encGGptr + 0 * m_nCiphertextSize, &count0, -1, m_nCiphertextSize, -1, 0, encGG_j0);
 		mpz_export(encGGptr + 1 * m_nCiphertextSize, &count1, -1, m_nCiphertextSize, -1, 0, encGG_j1);
 		mpz_export(encGGptr + 2 * m_nCiphertextSize, &count2, -1, m_nCiphertextSize, -1, 0, encGG_k0);
 		mpz_export(encGGptr + 3 * m_nCiphertextSize, &count3, -1, m_nCiphertextSize, -1, 0, encGG_k1);
 		assert(count0 == 1 && count1 == 1 && count2 == 1 && count3 == 1);
-		encGGptr += 4 * m_nCiphertextSize;
 #endif // KM11_IMPROVED
 	}
 
@@ -936,6 +939,7 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 						 aj_times_sj0_enc, aj_times_sj1_enc, ak_times_sk0_enc, ak_times_sk1_enc,
 						 encGG_j0, encGG_j1, encGG_k0, encGG_k1, NULL);
 #endif
+	}
 
 #elif KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_ECC
 	#pragma omp parallel firstprivate(maxgateid) private(gate)

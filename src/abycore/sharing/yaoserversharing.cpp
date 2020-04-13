@@ -2,8 +2,8 @@
  \file 		yaoserversharing.cpp
  \author	michael.zohner@ec-spride.de
  \copyright	ABY - A Framework for Efficient Mixed-protocol Secure Two-party Computation
-			Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
-			This program is free software: you can redistribute it and/or modify
+            Copyright (C) 2019 Engineering Cryptographic Protocols Group, TU Darmstadt
+            This program is free software: you can redistribute it and/or modify
             it under the terms of the GNU Lesser General Public License as published
             by the Free Software Foundation, either version 3 of the License, or
             (at your option) any later version.
@@ -784,7 +784,7 @@ void YaoServerSharing::CreateAndSendGarbledCircuit(ABYSetup* setup) {
 		fe* blindedWireKey = m_cPKCrypto->get_fe();
 #endif
 
-		#pragma omp parallel for
+		#pragma omp for
 		for (uint32_t i = m_nInputGates; i < m_nInputGates + m_nANDGates + m_nXORGates; i++) {
 			GATE* gate = &(m_vGates[i]);
 			assert(gate->type == G_LIN || gate->type == G_NON_LIN);
@@ -1172,9 +1172,9 @@ void YaoServerSharing::EvaluateKM11Gate(uint32_t gateid, ABYSetup* setup, BYTE* 
 	// GTKeys: [L0, R0, L0, R1, L1, R0, L1, R1]
 	//         [ 0   1   2   3   4   5   6   7]
 	size_t count0, count2;
-  // L0
-    mpz_export(GTKeys + 0 * m_nWireKeyBytes, &count0, -1, m_nWireKeyBytes, -1, 0, encGG_j0_dec);
-    memcpy(GTKeys + 2 * m_nWireKeyBytes, GTKeys + 0 * m_nWireKeyBytes, m_nWireKeyBytes);
+	// L0
+	mpz_export(GTKeys + 0 * m_nWireKeyBytes, &count0, -1, m_nWireKeyBytes, -1, 0, encGG_j0_dec);
+	memcpy(GTKeys + 2 * m_nWireKeyBytes, GTKeys + 0 * m_nWireKeyBytes, m_nWireKeyBytes);
 	// R0
 	mpz_export(GTKeys + 1 * m_nWireKeyBytes, &count2, -1, m_nWireKeyBytes, -1, 0, encGG_k0_dec);
 	memcpy(GTKeys + 5 * m_nWireKeyBytes, GTKeys + 1 * m_nWireKeyBytes, m_nWireKeyBytes);
@@ -1387,7 +1387,10 @@ void YaoServerSharing::CreateEncryptedWireKeys(){
 	struct timespec start, end;
 	uint64_t delta_a;
 	uint64_t delta;
+
+#if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN
 	fbpowmod_init_g(m_nDJNPubkey->h_s, m_nDJNPubkey->n_squared, 2 * m_nDJNBytes * 8);
+#endif
 
 	#pragma omp parallel
 	{
@@ -1554,6 +1557,8 @@ void YaoServerSharing::CreateEncryptedWireKeys(){
 
 #if KM11_CRYPTOSYSTEM == KM11_CRYPTOSYSTEM_DJN
 void YaoServerSharing::AddGlobalRandomShift(BYTE* keyout, BYTE* keyin) {
+	mpz_t m_zTmpWirekey; /**< temporary mpz value for a wire key */
+	mpz_init(m_zTmpWirekey);
 	mpz_import(m_zTmpWirekey, 1, -1, m_nWireKeyBytes, -1, 0, keyin);
 
 	mpz_add(m_zTmpWirekey, m_zTmpWirekey, m_zR);
@@ -1561,6 +1566,7 @@ void YaoServerSharing::AddGlobalRandomShift(BYTE* keyout, BYTE* keyin) {
 	size_t count;
 	mpz_export(keyout, &count, -1, m_nWireKeyBytes, -1, 0, m_zTmpWirekey);
 	assert(count == 1);
+	mpz_clear(m_zTmpWirekey);
 }
 #endif // KM11_CRYPTOSYSTEM
 #endif // KM11_GARBLING
@@ -1797,12 +1803,6 @@ void YaoServerSharing::GetDataToSend(std::vector<BYTE*>& sendbuf, std::vector<ui
 		sndbytes.push_back(m_nServerKeyCtr * m_nCiphertextSize);
 		std::cout << "[SEND] ServerInputKeys:\t" << m_nServerKeyCtr * m_nCiphertextSize << std::endl;
 #else
-#ifdef DEBUGYAOSERVER
-		std::cout << "want to send servers input keys which are of size " << m_nServerKeyCtr * m_nSecParamBytes << " bytes" << std::endl;
-		std::cout << "Server input keys = ";
-		m_vServerKeySndBuf.PrintHex();
-		std::cout << std::endl;
-#endif
 		sndbytes.push_back(m_nServerKeyCtr * m_nSecParamBytes);
 		std::cout << "[SEND] ServerInputKeys:\t" << m_nServerKeyCtr * m_nSecParamBytes << std::endl;
 #endif
