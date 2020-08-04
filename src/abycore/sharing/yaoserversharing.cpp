@@ -2024,7 +2024,7 @@ void YaoServerSharing::AssignOutputShares() {
 void YaoServerSharing::CreateRandomWireKeys(CBitVector& vec, uint32_t numkeys) {
 	//Create the random keys
 	vec.Create(numkeys * m_cCrypto->get_seclvl().symbits, m_cCrypto);
-	for (uint32_t i = 0; i < numkeys; i++) {
+	for (uint64_t i = 0; i < numkeys; i++) {
 		vec.ANDByte((i + 1) * m_nSecParamBytes - 1, 0xFE);
 	}
 #ifdef DEBUGYAOSERVER

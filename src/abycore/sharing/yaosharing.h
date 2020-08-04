@@ -50,7 +50,7 @@ typedef struct {
 #define KM11_CRYPTOSYSTEM_DJN 1
 #define KM11_CRYPTOSYSTEM_BFV 2
 #define KM11_CRYPTOSYSTEM_ECC 3
-#define KM11_CRYPTOSYSTEM KM11_CRYPTOSYSTEM_DJN
+#define KM11_CRYPTOSYSTEM KM11_CRYPTOSYSTEM_ECC
 
 // enable improved variant of KM11
 // (see section 3.2 "A More Efficient Variant" in KM11 paper)
@@ -65,7 +65,7 @@ typedef struct {
 
 // enable pipelined sending of the encrypted garbled gates
 // pipelining has to be disabled when using OpenMP
-// TODO: fix pipelining for OpenMP
+// TODO: implement pipelining for OpenMP
 //#define KM11_PIPELINING
 
 // garbled tables with only two entries are not compatible with the KM11

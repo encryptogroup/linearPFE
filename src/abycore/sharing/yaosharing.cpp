@@ -68,20 +68,23 @@ YaoSharing::~YaoSharing() {
 // symmectric encrytion function (AES encrytion using key as the seed for the AES key)
 void YaoSharing::sEnc(BYTE* c, BYTE* p, uint32_t p_len, BYTE* key, uint32_t key_len, uint32_t gateid)
 {
-	int nrounds = 5; // rounds of key material hashing
-	unsigned char evp_key[32], evp_iv[32];
+	int nrounds = 1000; // rounds of key material hashing
+	unsigned char evp_key_and_iv[32];
 
 	BYTE bytesToKey[key_len + 4];
 	memcpy(bytesToKey, key, key_len);
 	memcpy(bytesToKey + key_len, reinterpret_cast<BYTE*>(&gateid), 4);
 
-	int i = EVP_BytesToKey(EVP_aes_128_cbc(), EVP_sha256(), NULL, bytesToKey, key_len + 4, nrounds, evp_key, evp_iv);
-	assert(i == 16); // key size should be 128 bits (16 bytes)
+	int success = PKCS5_PBKDF2_HMAC(reinterpret_cast<const char*>(bytesToKey), key_len + 4,
+			  NULL, 0, nrounds,
+			  EVP_sha256(),
+			  32, evp_key_and_iv);
+	assert(success == 1);
 
 	EVP_CIPHER_CTX* enc_ctx;
 	enc_ctx = EVP_CIPHER_CTX_new();
 	EVP_CIPHER_CTX_init(enc_ctx);
-	EVP_EncryptInit_ex(enc_ctx, EVP_aes_128_cbc(), NULL, evp_key, evp_iv);
+	EVP_EncryptInit_ex(enc_ctx, EVP_aes_128_cbc(), NULL, evp_key_and_iv, &evp_key_and_iv[16]);
 
 	// encrypt counter to get (p_len bytes + 40 bits) of encrypted data (will later be XORed with plaintext)
 	uint32_t num_AES_blocks = (p_len + AES_BYTES - 1) / AES_BYTES; // ceil(plen/AES_BYTES)
@@ -119,19 +122,22 @@ void YaoSharing::sEnc(BYTE* c, BYTE* p, uint32_t p_len, BYTE* key, uint32_t key_
 
 bool YaoSharing::sDec(BYTE* p, uint32_t p_len, BYTE* table, BYTE* key, uint32_t key_len, uint32_t gateid)
 {
-	int nrounds = 5; // rounds of key material hashing
-	unsigned char evp_key[32], evp_iv[32];
+	int nrounds = 1000; // rounds of key material hashing
+	unsigned char evp_key_and_iv[32];
 
 	BYTE bytesToKey[key_len + 4];
 	memcpy(bytesToKey, key, key_len);
 	memcpy(bytesToKey + key_len, reinterpret_cast<BYTE*>(&gateid), 4);
 
-	EVP_BytesToKey(EVP_aes_128_cbc(), EVP_sha256(), NULL, bytesToKey, key_len + 4, nrounds, evp_key, evp_iv);
+	PKCS5_PBKDF2_HMAC(reinterpret_cast<const char*>(bytesToKey), key_len + 4,
+			  NULL, 0, nrounds,
+			  EVP_sha256(),
+			  32, evp_key_and_iv);
 
 	EVP_CIPHER_CTX* enc_ctx;
 	enc_ctx = EVP_CIPHER_CTX_new();
 	EVP_CIPHER_CTX_init(enc_ctx);
-	EVP_EncryptInit_ex(enc_ctx, EVP_aes_128_cbc(), NULL, evp_key, evp_iv);
+	EVP_EncryptInit_ex(enc_ctx, EVP_aes_128_cbc(), NULL, evp_key_and_iv, &evp_key_and_iv[16]);
 
 	// encrypt counter to get (p_len bytes + 40 bits) of encrypted data (will later be XORed with plaintext)
 	uint32_t num_AES_blocks = (p_len + m_nPADDING_BYTES + AES_BYTES - 1) / AES_BYTES; // ceil(plen/AES_BYTES)
