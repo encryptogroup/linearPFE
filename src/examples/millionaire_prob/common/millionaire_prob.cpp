@@ -21,7 +21,7 @@
 #include "../../../abycore/sharing/sharing.h"
 
 int32_t test_millionaire_prob_circuit(e_role role, const std::string& address, uint16_t port, seclvl seclvl,
-		uint32_t bitlen, uint32_t nthreads, e_mt_gen_alg mt_alg, e_sharing sharing) {
+		uint32_t bitlen, uint32_t nthreads, e_mt_gen_alg mt_alg, e_sharing sharing, uint32_t reqNumberOfGates) {
 
 	/**
 		Step 1: Create the ABYParty object which defines the basis of all the
@@ -62,8 +62,8 @@ int32_t test_millionaire_prob_circuit(e_role role, const std::string& address, u
 
 	uint32_t alice_money, bob_money, output;
 	srand(time(NULL));
-	alice_money = rand();
-	bob_money = rand();
+	alice_money = 12;//rand();
+	bob_money = 7;//rand();
 
 	/**
 		Step 6: Copy the randomly generated money into the respective
@@ -88,7 +88,7 @@ int32_t test_millionaire_prob_circuit(e_role role, const std::string& address, u
 	*/
 
 	s_out = BuildMillionaireProbCircuit(s_alice_money, s_bob_money,
-			(BooleanCircuit*) circ);
+			(BooleanCircuit*) circ, reqNumberOfGates);
 
 	/**
 		Step 8: Modify the output receiver based on the role played by
@@ -112,21 +112,28 @@ int32_t test_millionaire_prob_circuit(e_role role, const std::string& address, u
 				<< " sharing: " << std::endl;
 	std::cout << "\nAlice Money:\t" << alice_money;
 	std::cout << "\nBob Money:\t" << bob_money;
-	std::cout << "\nCircuit Result:\t" << (output ? ALICE : BOB);
-	std::cout << "\nVerify Result: \t" << ((alice_money > bob_money) ? ALICE : BOB)
-				<< "\n";
+	std::cout << "\nCircuit Result:\t" << (output ? ALICE : BOB) << " (output is '" << output << "')";
+	std::cout << "\nVerify Result: \t" << ((alice_money > bob_money) ? ALICE : BOB) << "\n";
 
 	delete party;
 	return 0;
 }
 
 share* BuildMillionaireProbCircuit(share *s_alice, share *s_bob,
-		BooleanCircuit *bc) {
+		BooleanCircuit *bc, uint32_t reqNumberOfGates) {
 
 	share* out;
 
 	/** Calling the greater than equal function in the Boolean circuit class.*/
-	out = bc->PutGTGate(s_alice, s_bob);
+	// out = bc->PutGTGate(s_alice, s_bob);
+	// out = bc->PutXORGate(s_alice, s_bob);
+	out = bc->PutANDGate(s_alice, s_bob);
+
+	size_t numberOfGates = 32;
+	while (numberOfGates < reqNumberOfGates) {
+		out = bc->PutANDGate(out, s_bob);
+		numberOfGates += 32;
+	}
 
 	return out;
 }

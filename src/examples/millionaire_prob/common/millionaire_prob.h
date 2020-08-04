@@ -41,7 +41,7 @@
  millionaire's problem
  */
 int32_t test_millionaire_prob_circuit(e_role role, const std::string& address, uint16_t port, seclvl seclvl,
-		uint32_t bitlen, uint32_t nthreads, e_mt_gen_alg mt_alg, e_sharing sharing);
+        uint32_t bitlen, uint32_t nthreads, e_mt_gen_alg mt_alg, e_sharing sharing, uint32_t reqNumberOfGates);
 
 /**
  \param		s_alice		shared object of alice.
@@ -50,7 +50,7 @@ int32_t test_millionaire_prob_circuit(e_role role, const std::string& address, u
  \brief		This function is used to build and solve the millionaire's problem.
  */
 share* BuildMillionaireProbCircuit(share *s_alice, share *s_bob,
-		BooleanCircuit *bc);
+        BooleanCircuit *bc, uint32_t reqNumberOfGates);
 
 
 #endif /* __MILLIONAIREPROB_H_ */
