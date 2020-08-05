@@ -1272,14 +1272,20 @@ void YaoServerSharing::EvaluateKM11Gate(uint32_t gateid, ABYSetup* setup, BYTE* 
 		val1 = 0; val2 = 0; val3 = 1;
 	}
 
+	// shuffle the indices of the gartbled table entries to place the encrypted GT entries in random order
+	std::vector<int> table_indices = {0, 1, 2, 3};
+	auto rd = std::random_device {};
+	auto rng = std::default_random_engine { rd() };
+	std::shuffle(std::begin(table_indices), std::end(table_indices), rng);
+
 	// encrypt the 4 garbled table entries
-	sEnc(table + 0 * (GTEntrySize + m_nPADDING_BYTES), tmpWirekeys +    0 * (GTEntrySize + m_nPADDING_BYTES), GTEntrySize + m_nPADDING_BYTES,
+	sEnc(table + table_indices[0] * (GTEntrySize + m_nPADDING_BYTES), tmpWirekeys +    0 * (GTEntrySize + m_nPADDING_BYTES), GTEntrySize + m_nPADDING_BYTES,
 			GTKeys + 0 * GTEntrySize, 2 * GTEntrySize, gateid);
-	sEnc(table + 1 * (GTEntrySize + m_nPADDING_BYTES), tmpWirekeys + val1 * (GTEntrySize + m_nPADDING_BYTES), GTEntrySize + m_nPADDING_BYTES,
+	sEnc(table + table_indices[1] * (GTEntrySize + m_nPADDING_BYTES), tmpWirekeys + val1 * (GTEntrySize + m_nPADDING_BYTES), GTEntrySize + m_nPADDING_BYTES,
 			GTKeys + 2 * GTEntrySize, 2 * GTEntrySize, gateid);
-	sEnc(table + 2 * (GTEntrySize + m_nPADDING_BYTES), tmpWirekeys + val2 * (GTEntrySize + m_nPADDING_BYTES), GTEntrySize + m_nPADDING_BYTES,
+	sEnc(table + table_indices[2] * (GTEntrySize + m_nPADDING_BYTES), tmpWirekeys + val2 * (GTEntrySize + m_nPADDING_BYTES), GTEntrySize + m_nPADDING_BYTES,
 			GTKeys + 4 * GTEntrySize, 2 * GTEntrySize, gateid);
-	sEnc(table + 3 * (GTEntrySize + m_nPADDING_BYTES), tmpWirekeys + val3 * (GTEntrySize + m_nPADDING_BYTES), GTEntrySize + m_nPADDING_BYTES,
+	sEnc(table + table_indices[3] * (GTEntrySize + m_nPADDING_BYTES), tmpWirekeys + val3 * (GTEntrySize + m_nPADDING_BYTES), GTEntrySize + m_nPADDING_BYTES,
 			GTKeys + 6 * GTEntrySize, 2 * GTEntrySize, gateid);
 
 #ifndef _OPENMP
