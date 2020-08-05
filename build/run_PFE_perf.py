@@ -33,7 +33,7 @@ echo $fileprefix
 for g in 1000 10000 100000 1000000
 do
 	echo "Running with g = $g gates"
-	for i in {1..2}
+	for i in {1..10}
 	do
                 # edit the next line to run on a different servers
                 # example: bin/millionaire_prob_test -r $r -g $g -a 10.10.10.10 >> $fileprefix$g
