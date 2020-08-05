@@ -800,8 +800,7 @@ void YaoClientSharing::CreateEncGarbledGates(ABYSetup* setup) {
 
 			seal::parms_id_type parms_id = encGG.parms_id();
 			std::shared_ptr<const seal::SEALContext::ContextData> context_data_ = m_nWirekeySEALcontext->get_context_data(parms_id);
-			AddExtraNoise(encGG, context_data_, 4, pool); // after this step, the invariant noise budget
-			//											  // should be sigma (=40) bits less than it was before
+			AddExtraNoise(encGG, context_data_, 4, pool); // after this step, the invariant noise budget should be sigma (=40) bits less than it was before
 			// bfvWirekeyEvaluator.mod_switch_to_next_inplace(encGG);
 
 #ifdef DEBUGYAOCLIENT
@@ -1783,7 +1782,6 @@ void YaoClientSharing::AddPolyCoeffsUniform(uint64_t *poly, uint32_t noise_len,
 void YaoClientSharing::AddExtraNoise(seal::Ciphertext &destination, std::shared_ptr<const seal::SEALContext::ContextData> &context_data,
 		 uint32_t noise_len, seal::MemoryPoolHandle pool)
 {
-		//auto &context_data = *(encryptor.context_)->context_data();
 		auto &parms = context_data->parms();
 		auto &coeff_modulus = parms.coeff_modulus();
 		size_t coeff_count = parms.poly_modulus_degree();

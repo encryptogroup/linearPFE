@@ -63,6 +63,7 @@ find_package(Threads REQUIRED)
 find_package(Boost 1.66.0 REQUIRED COMPONENTS thread system)
 find_package(SEAL 3.4.5 EXACT REQUIRED)
 
+# Remove/comment the following lines to disable OpenMP parallel execution
 find_package(OpenMP)
 if(OPENMP_FOUND)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
